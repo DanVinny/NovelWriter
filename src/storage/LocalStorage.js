@@ -226,7 +226,11 @@ export class Storage {
         backgroundColor: null,
         currentFont: 'Merriweather',
         currentFontSize: 16,
-        currentTextColor: '#000000'
+        currentTextColor: '#000000',
+        aiProvider: '',
+        aiApiKey: '',
+        aiModel: '',
+        contextStrategy: 'smart' // 'smart' (summaries) or 'full' (all content)
       },
       currentView: {
         section: 'manuscript',

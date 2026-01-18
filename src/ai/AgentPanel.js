@@ -29,12 +29,18 @@ export class AgentPanel {
         this.statusIndicator = document.getElementById('agent-status');
         this.newConversationBtn = document.getElementById('agent-new-conversation');
         this.conversationSelect = document.getElementById('agent-conversation-select');
+        this.deleteConversationBtn = document.getElementById('agent-delete-conversation');
 
         this.bindEvents();
         this.loadActiveConversation();
     }
 
     bindEvents() {
+        // Delete conversation
+        if (this.deleteConversationBtn) {
+            this.deleteConversationBtn.addEventListener('click', () => this.deleteCurrentConversation());
+        }
+
         // Toggle panel
         if (this.drawerTab) {
             this.drawerTab.addEventListener('click', () => this.togglePanel());
@@ -673,12 +679,22 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
             msg.remove();
         }
 
-        // Update internal history - find and remove corresponding entries
-        // We need to find the user message in history and truncate from there
-        const historyIndex = this.history.findIndex(h =>
-            h.role === 'user' && h.content === content
-        );
-        if (historyIndex !== -1) {
+        // Update internal history - find correct index by counting previous messages in DOM
+        // (Content matching is unsafe if user said the same thing twice)
+        let historyIndex = 0;
+        const allMessages = Array.from(this.historyContainer.children);
+
+        for (const msg of allMessages) {
+            if (msg.id === messageId) break;
+
+            // Only count messages that actually exist in history (user and agent)
+            if (msg.classList.contains('user') || msg.classList.contains('agent')) {
+                historyIndex++;
+            }
+        }
+
+        // Slice history up to this index
+        if (historyIndex >= 0 && historyIndex < this.history.length) {
             this.history = this.history.slice(0, historyIndex);
         }
 
@@ -714,19 +730,31 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
             this.history.pop();
         }
 
-        // Remove the last agent message and mode announcement from UI
+        // Remove the last user message from history (so it doesn't get duplicated)
+        if (this.history.length > 0 && this.history[this.history.length - 1].role === 'user') {
+            this.history.pop();
+        }
+
+        // Remove the last agent message, mode announcement, AND user message from UI
         if (this.historyContainer) {
             const messages = this.historyContainer.querySelectorAll('.agent-message');
             const toRemove = [];
 
             // Find last agent message and any mode announcement before it
+            let passedAgent = false;
             for (let i = messages.length - 1; i >= 0; i--) {
                 const msg = messages[i];
                 if (msg.classList.contains('agent')) {
                     toRemove.push(msg);
-                    break;
+                    passedAgent = true;
                 } else if (msg.classList.contains('mode-announcement')) {
                     toRemove.push(msg);
+                } else if (msg.classList.contains('user')) {
+                    if (passedAgent) {
+                        // This is the user message associated with the agent response we just removed
+                        toRemove.push(msg);
+                        break; // Stop after removing the user message pair
+                    }
                 }
             }
 
@@ -954,6 +982,40 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
         // Clear UI
         this.clearHistoryUI();
         this.populateConversationSelect();
+    }
+
+    /**
+     * Delete the current conversation
+     */
+    deleteCurrentConversation() {
+        if (!this.currentConversationId) return;
+
+        if (!confirm('Are you sure you want to delete this conversation? This cannot be undone.')) {
+            return;
+        }
+
+        const state = this.app.state;
+        if (!state.conversations) return;
+
+        // Remove from state
+        state.conversations = state.conversations.filter(c => c.id !== this.currentConversationId);
+
+        // Determine next active conversation
+        const remaining = state.conversations.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+        const nextId = remaining.length > 0 ? remaining[0].id : null;
+
+        // Update active ID
+        state.activeConversationId = nextId;
+        this.app.save();
+
+        if (nextId) {
+            this.loadConversation(nextId);
+        } else {
+            this.currentConversationId = null;
+            this.history = [];
+            this.clearHistoryUI();
+            this.populateConversationSelect();
+        }
     }
 
     /**

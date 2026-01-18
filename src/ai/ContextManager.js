@@ -77,16 +77,29 @@ export class ContextManager {
 
         if (!currentPartId) return null;
 
-        // Get the full part content
+        // Get the full part content and collect suggestions
         const part = this.app.state.manuscript.parts.find(p => p.id === currentPartId);
         if (!part) return null;
 
         let content = '';
+        const allSuggestions = [];
+
         part.chapters?.forEach(chapter => {
             content += `# ${chapter.displayTitle || chapter.title}\n\n`;
             chapter.scenes?.forEach(s => {
                 content += `## ${s.title}\n`;
+                // Add content
                 content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+
+                // Collect suggestions if present
+                if (s.suggestions && s.suggestions.items && s.suggestions.items.length > 0) {
+                    allSuggestions.push({
+                        sceneTitle: s.title,
+                        chapterTitle: chapter.title,
+                        type: s.suggestions.type,
+                        items: s.suggestions.items
+                    });
+                }
             });
         });
 
@@ -96,7 +109,8 @@ export class ContextManager {
             title: part.displayTitle || part.title,
             focusInfo: focusInfo,
             content: content,
-            wordCount: content.trim().split(/\s+/).filter(w => w).length
+            wordCount: content.trim().split(/\s+/).filter(w => w).length,
+            allSuggestions: allSuggestions
         };
     }
 
@@ -166,6 +180,28 @@ export class ContextManager {
         }
 
         return { beforeSummaries, afterSummaries };
+    }
+
+    /**
+     * Get full content of ALL parts (for "Full Manuscript" context strategy)
+     */
+    getAllPartsContent() {
+        const parts = this.app.state.manuscript.parts || [];
+        let content = '';
+
+        parts.forEach(part => {
+            content += `# ${part.displayTitle || part.title}\n\n`;
+            part.chapters?.forEach(chapter => {
+                content += `## ${chapter.displayTitle || chapter.title}\n\n`;
+                chapter.scenes?.forEach(s => {
+                    content += `### ${s.title}\n`;
+                    content += (s.content?.replace(/<[^>]*>/g, '') || '') + '\n\n';
+                });
+            });
+            content += '---\n\n';
+        });
+
+        return content;
     }
 
     /**
@@ -310,29 +346,61 @@ export class ContextManager {
         if (includeCurrentScene) {
             const active = this.getActiveContentContext();
             if (active) {
-                // Add summaries of parts BEFORE the current part
-                if (active.partId) {
-                    const { beforeSummaries, afterSummaries } = this.getOtherPartSummaries(active.partId);
+                const strategy = this.app.state.settings.contextStrategy || 'smart';
 
-                    if (beforeSummaries) {
-                        context += `# Story So Far (Previous Parts)\n${beforeSummaries}\n---\n\n`;
+                if (strategy === 'full') {
+                    // FULL CONTEXT STRATEGY: Include entire manuscript
+                    context += `# FULL MANUSCRIPT CONTENT\n\n`;
+                    context += this.getAllPartsContent();
+                    context += `\n---\n\n`;
+
+                    // Add current focus info
+                    context += `# Current Focus: ${active.title}\n`;
+                    if (active.focusInfo && active.focusInfo.type !== 'part') {
+                        context += `(Working on ${active.focusInfo.type}: ${active.focusInfo.title})\n`;
+                    }
+                    context += `\n---\n\n`;
+
+                } else {
+                    // SMART STRATEGY (Default): Summaries + Current Part
+
+                    // Add summaries of parts BEFORE the current part
+                    if (active.partId) {
+                        const { beforeSummaries, afterSummaries } = this.getOtherPartSummaries(active.partId);
+
+                        if (beforeSummaries) {
+                            context += `# Story So Far (Previous Parts)\n${beforeSummaries}\n---\n\n`;
+                        }
+                    }
+
+                    // Add current part info with focus details
+                    context += `# Current Part: ${active.title}`;
+                    if (active.focusInfo && active.focusInfo.type !== 'part') {
+                        context += ` (focused on ${active.focusInfo.type}: ${active.focusInfo.title})`;
+                    }
+                    context += `\n\n`;
+                    context += `## Full Part Content (${active.wordCount} words):\n${active.content}\n\n---\n\n`;
+
+                    // Add summaries of parts AFTER the current part
+                    if (active.partId) {
+                        const { afterSummaries } = this.getOtherPartSummaries(active.partId);
+                        if (afterSummaries) {
+                            context += `# Future Parts (Summaries)\n${afterSummaries}\n---\n\n`;
+                        }
                     }
                 }
 
-                // Add current part info with focus details
-                context += `# Current Part: ${active.title}`;
-                if (active.focusInfo && active.focusInfo.type !== 'part') {
-                    context += ` (focused on ${active.focusInfo.type}: ${active.focusInfo.title})`;
-                }
-                context += `\n\n`;
-                context += `## Full Part Content (${active.wordCount} words):\n${active.content}\n\n---\n\n`;
-
-                // Add summaries of parts AFTER the current part
-                if (active.partId) {
-                    const { afterSummaries } = this.getOtherPartSummaries(active.partId);
-                    if (afterSummaries) {
-                        context += `# Future Parts (Summaries)\n${afterSummaries}\n---\n\n`;
-                    }
+                // Add existing suggestions for current part (Always include for both strategies)
+                if (active.allSuggestions && active.allSuggestions.length > 0) {
+                    context += `# Existing AI Suggestions in this Part\n\n`;
+                    active.allSuggestions.forEach(item => {
+                        context += `### Scene: ${item.sceneTitle} (${item.type} mode)\n`;
+                        item.items.forEach(s => {
+                            context += `- [S${s.number}]: ${s.text}\n`;
+                        });
+                        context += '\n';
+                    });
+                    context += '---\n\n';
                 }
             } else if (active && active.type === 'book') {
                 // Book-level context (no summaries needed, full manuscript)

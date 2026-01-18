@@ -11,6 +11,7 @@ export class Settings {
         // Appearance settings
         this.themeSelect = document.getElementById('setting-theme');
         this.fontSelect = document.getElementById('setting-font');
+        this.contextStrategySelect = document.getElementById('setting-ai-context-strategy');
         this.saveBtn = document.getElementById('save-settings');
 
         this.bindEvents();
@@ -34,6 +35,8 @@ export class Settings {
         const state = this.app.state;
         this.themeSelect.value = state.settings.theme;
         this.fontSelect.value = state.settings.font;
+        // Default to 'smart' if not set
+        this.contextStrategySelect.value = state.settings.contextStrategy || 'smart';
         this.modal.classList.add('open');
     }
 
@@ -53,6 +56,9 @@ export class Settings {
 
         // Update font
         state.settings.font = this.fontSelect.value;
+
+        // Update context strategy
+        state.settings.contextStrategy = this.contextStrategySelect.value;
 
         // Apply font to editor
         const editor = document.getElementById('editor-content');
