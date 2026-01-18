@@ -1283,6 +1283,40 @@ body {
   margin: var(--space-xs) 0;
 }
 
+/* Submenu Support */
+.context-menu-item.has-submenu {
+  position: relative;
+  justify-content: space-between;
+}
+
+.context-menu-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.context-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 180px;
+  padding: var(--space-xs) 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-8px);
+  transition: all var(--transition-fast);
+}
+
+.context-menu-item.has-submenu:hover>.context-submenu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
 /* ========================================
    Tree Item with Menu Button
    ======================================== */
@@ -2777,4 +2811,139 @@ body {
 /* Ensure tree-children container displays properly */
 .tree-children {
   display: block;
+}
+
+/* ========================================
+   Scene Suggestions
+   ======================================== */
+
+.suggestion-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.suggestion-generating h2 {
+  margin-bottom: 8px;
+  color: var(--accent-primary);
+}
+
+.suggestion-panel {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 2px dashed var(--border-color);
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.suggestion-type {
+  font-weight: 600;
+  color: var(--accent-primary);
+  font-size: 14px;
+}
+
+.suggestion-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.suggestion-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent-primary);
+  padding: 12px 16px;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: context-menu;
+  transition: all var(--transition-fast);
+}
+
+.suggestion-block:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+}
+
+.suggestion-number {
+  font-weight: 700;
+  color: var(--accent-primary);
+  font-size: 12px;
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.suggestion-text {
+  color: var(--text-primary);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+/* Inline Suggestion View */
+.suggestion-view {
+  padding: 0;
+}
+
+.suggestion-view-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.suggestion-view-header .suggestion-type {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.suggestion-view-header .suggestion-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.suggestion-view-content {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+/* Inline suggestion blocks within text - subtle styling */
+.suggestion-inline {
+  display: inline;
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  cursor: context-menu;
+  border-bottom: 1px dashed #16a34a;
+  transition: all var(--transition-fast);
+}
+
+.suggestion-inline:hover {
+  background: rgba(34, 197, 94, 0.25);
+  border-bottom-style: solid;
 }

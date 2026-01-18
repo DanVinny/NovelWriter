@@ -617,6 +617,10 @@ class NovelWriterApp {
   }
 
   loadSceneView(partId, chapterId, sceneId) {
+    this.loadScene(partId, chapterId, sceneId);
+  }
+
+  loadScene(partId, chapterId, sceneId) {
     this.currentContext = { type: 'scene', partId, chapterId, sceneId };
     const part = this.state.manuscript.parts.find(p => p.id === partId);
     const chapter = part?.chapters.find(c => c.id === chapterId);
@@ -634,6 +638,11 @@ class NovelWriterApp {
       editor.classList.add('empty');
     }
 
+    // Render suggestion blocks if any exist
+    if (scene.suggestions?.items?.length > 0) {
+      this.renderSuggestions(editor, scene);
+    }
+
     const handleFocus = () => {
       if (editor.classList.contains('empty')) {
         editor.classList.remove('empty');
@@ -644,6 +653,170 @@ class NovelWriterApp {
     editor.addEventListener('focus', handleFocus);
 
     this.updateWordCount(editor.innerText);
+  }
+
+  renderSuggestions(editor, scene) {
+    const suggestions = scene.suggestions.items;
+    const annotatedText = scene.suggestions.annotatedText;
+    const typeLabels = {
+      expand: 'Expand', shorten: 'Shorten', dialogue: 'Dialogue',
+      sensory: 'Sensory', grammar: 'Grammar', prose: 'Prose', review: 'Review'
+    };
+
+    // If we have annotated text, display it with inline suggestions
+    if (annotatedText) {
+      // Convert [S1: text] blocks to styled interactive elements
+      let styledText = annotatedText.replace(
+        /\[S(\d+):\s*([^\]]+)\]/g,
+        '<span class="suggestion-inline" data-id="s$1" data-number="$1" title="Right-click for options">[S$1: $2]</span>'
+      );
+
+      // Wrap in a container
+      const suggestionView = document.createElement('div');
+      suggestionView.className = 'suggestion-view';
+      suggestionView.innerHTML = `
+        <div class="suggestion-view-header">
+          <span class="suggestion-type">🤖 ${typeLabels[scene.suggestions.type] || 'Suggestions'} Mode</span>
+          <span class="suggestion-count">${suggestions.length} inline suggestion${suggestions.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="suggestion-view-content">${styledText.replace(/\n/g, '<br>')}</div>
+      `;
+
+      // Replace editor content with suggestion view
+      editor.innerHTML = '';
+      editor.appendChild(suggestionView);
+
+      // Bind right-click handlers for inline suggestion blocks
+      editor.querySelectorAll('.suggestion-inline').forEach(block => {
+        block.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const suggestionId = block.dataset.id;
+          const suggestionNumber = block.dataset.number;
+
+          this.treeNav.contextMenu.show(e.clientX, e.clientY, [
+            { label: '💬 Expand in Chat', onClick: () => this.expandSuggestionInChat(scene, suggestionId, suggestionNumber) },
+            { divider: true },
+            { label: '🗑️ Remove This Suggestion', onClick: () => this.removeInlineSuggestion(scene, suggestionId) }
+          ]);
+        });
+      });
+    } else {
+      // Fallback to bottom panel if no annotated text
+      const suggestionPanel = document.createElement('div');
+      suggestionPanel.className = 'suggestion-panel';
+      suggestionPanel.innerHTML = `
+        <div class="suggestion-header">
+          <span class="suggestion-type">🤖 ${typeLabels[scene.suggestions.type] || 'Suggestions'}</span>
+          <span class="suggestion-count">${suggestions.length} suggestion${suggestions.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="suggestion-list">
+          ${suggestions.map(s => `
+            <div class="suggestion-block" data-id="${s.id}" data-number="${s.number}">
+              <span class="suggestion-number">S${s.number}</span>
+              <span class="suggestion-text">${s.text}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      editor.appendChild(suggestionPanel);
+
+      // Bind right-click handlers
+      suggestionPanel.querySelectorAll('.suggestion-block').forEach(block => {
+        block.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const suggestionId = block.dataset.id;
+          const suggestionNumber = block.dataset.number;
+
+          this.treeNav.contextMenu.show(e.clientX, e.clientY, [
+            { label: '💬 Expand in Chat', onClick: () => this.expandSuggestionInChat(scene, suggestionId, suggestionNumber) },
+            { divider: true },
+            { label: '🗑️ Remove Suggestion', onClick: () => this.removeSuggestion(scene, suggestionId) }
+          ]);
+        });
+      });
+    }
+  }
+
+  removeInlineSuggestion(scene, suggestionId) {
+    const { partId, chapterId, sceneId } = this.currentContext || {};
+    if (!partId || !chapterId || !sceneId) return;
+
+    const part = this.state.manuscript.parts.find(p => p.id === partId);
+    const chapter = part?.chapters.find(c => c.id === chapterId);
+    const freshScene = chapter?.scenes.find(s => s.id === sceneId);
+
+    if (freshScene?.suggestions) {
+      // Remove from items array
+      freshScene.suggestions.items = freshScene.suggestions.items.filter(s => s.id !== suggestionId);
+
+      // Also remove from annotated text
+      const num = suggestionId.replace('s', '');
+      freshScene.suggestions.annotatedText = freshScene.suggestions.annotatedText.replace(
+        new RegExp(`\\[S${num}:\\s*[^\\]]+\\]`, 'g'), ''
+      );
+
+      if (freshScene.suggestions.items.length === 0) {
+        delete freshScene.suggestions;
+      }
+      this.save();
+      this.loadScene(partId, chapterId, sceneId);
+    }
+  }
+
+  expandSuggestionInChat(scene, suggestionId, suggestionNumber) {
+    const suggestion = scene.suggestions?.items?.find(s => s.id === suggestionId);
+    if (!suggestion) {
+      console.error('Suggestion not found:', suggestionId);
+      return;
+    }
+
+    // Open agent panel if not already expanded
+    if (this.agentPanel && !this.agentPanel.isExpanded) {
+      this.agentPanel.togglePanel();
+    }
+
+    // Pre-fill and focus input
+    setTimeout(() => {
+      const input = document.getElementById('agent-input');
+      if (input) {
+        input.value = `Help me implement suggestion S${suggestionNumber} in "${scene.title}": "${suggestion.text}"`;
+        input.focus();
+      }
+    }, 200);
+  }
+
+  removeSuggestion(scene, suggestionId) {
+    console.log('removeSuggestion called:', suggestionId);
+
+    // Get fresh scene reference from state
+    const { partId, chapterId, sceneId } = this.currentContext || {};
+    if (!partId || !chapterId || !sceneId) {
+      console.error('No current context for removeSuggestion');
+      return;
+    }
+
+    const part = this.state.manuscript.parts.find(p => p.id === partId);
+    const chapter = part?.chapters.find(c => c.id === chapterId);
+    const freshScene = chapter?.scenes.find(s => s.id === sceneId);
+
+    console.log('Fresh scene found:', !!freshScene, 'Has suggestions:', !!freshScene?.suggestions?.items);
+
+    if (freshScene?.suggestions?.items) {
+      const originalCount = freshScene.suggestions.items.length;
+      freshScene.suggestions.items = freshScene.suggestions.items.filter(s => s.id !== suggestionId);
+      console.log('Filtered suggestions:', originalCount, '->', freshScene.suggestions.items.length);
+
+      if (freshScene.suggestions.items.length === 0) {
+        delete freshScene.suggestions;
+        console.log('Deleted all suggestions');
+      }
+      this.save();
+      // Re-load scene
+      this.loadScene(partId, chapterId, sceneId);
+    } else {
+      console.error('No suggestions to remove');
+    }
   }
 
   loadPlotGrid(gridId) {

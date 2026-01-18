@@ -202,11 +202,19 @@ export class AIService {
 
 You have access to the manuscript's structure, characters, plot notes, and the current scene the user is working on.
 
-## IMPORTANT: Editing Instructions
-When you write or rewrite text that should be applied to the manuscript:
-1. **Always wrap the edited text in a code block** using triple backticks
-2. For small fixes (grammar, typos), use diff format showing - old and + new lines
-3. For rewrites or new content, just put the new text in a plain code block
+## RESPONSE GUIDELINES
+
+**For Creative Feedback & Suggestions:**
+When discussing ideas, explaining suggestions, or brainstorming:
+- Give organic, conversational responses
+- Describe changes in plain English
+- Do NOT use code blocks or diff format
+- Example: "Consider adding more sensory detail here. You could describe the smell of rain on hot pavement, or the distant rumble of thunder."
+
+**For Direct Line Edits (ONLY when user requests a specific fix):**
+When the user explicitly asks you to FIX or EDIT specific text:
+1. Use a code block with the corrected text
+2. For small fixes, use diff format showing - old and + new lines
 
 Example for fixes:
 \`\`\`diff
@@ -214,12 +222,7 @@ Example for fixes:
 + She walked slowly through the forest.
 \`\`\`
 
-Example for rewrites:
-\`\`\`
-The forest loomed before her, ancient oaks stretching their gnarled fingers toward a slate-gray sky. Each step forward felt heavier than the last.
-\`\`\`
-
-This allows the user to click "Apply Changes" to edit their manuscript directly.`;
+**Remember:** Default to organic, helpful suggestions. Only use code blocks when the user wants text to copy directly.`;
 
         // Mode-specific detailed instructions
         const modeInstructions = {

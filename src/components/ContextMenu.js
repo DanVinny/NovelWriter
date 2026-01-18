@@ -33,29 +33,62 @@ export class ContextMenu {
     }
 
     show(x, y, items) {
-        // Build menu items
-        this.menu.innerHTML = items.map(item => {
+        // Build menu items (with submenu support)
+        this.menu.innerHTML = items.map((item, idx) => {
             if (item.divider) {
                 return '<div class="context-menu-divider"></div>';
             }
+            if (item.submenu) {
+                return `
+                <div class="context-menu-item has-submenu" data-submenu-idx="${idx}">
+                    ${item.icon ? `<span class="context-menu-icon">${item.icon}</span>` : ''}
+                    <span class="context-menu-label">${item.label}</span>
+                    <span class="context-menu-arrow">▶</span>
+                    <div class="context-submenu">
+                        ${item.submenu.map((sub, subIdx) => {
+                    if (sub.divider) return '<div class="context-menu-divider"></div>';
+                    return `<button class="context-menu-item" data-parent="${idx}" data-sub="${subIdx}">${sub.label}</button>`;
+                }).join('')}
+                    </div>
+                </div>`;
+            }
             return `
-        <button class="context-menu-item" data-action="${item.action}">
-          ${item.icon ? `<span class="context-menu-icon">${item.icon}</span>` : ''}
-          <span class="context-menu-label">${item.label}</span>
-        </button>
-      `;
+                <button class="context-menu-item" data-action="${item.action || ''}" data-idx="${idx}">
+                    ${item.icon ? `<span class="context-menu-icon">${item.icon}</span>` : ''}
+                    <span class="context-menu-label">${item.label}</span>
+                </button>
+            `;
         }).join('');
 
-        // Bind click events
-        this.menu.querySelectorAll('.context-menu-item').forEach((btn, index) => {
-            const item = items.filter(i => !i.divider)[index];
-            if (item && item.onClick) {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    item.onClick();
-                    this.hide();
+        // Bind click events for regular items
+        let nonDividerIndex = 0;
+        items.forEach((item, originalIdx) => {
+            if (item.divider) return; // Skip dividers
+            if (item.submenu) {
+                // Handle submenu items separately
+                item.submenu.forEach((subItem, subIdx) => {
+                    if (subItem.divider) return;
+                    const btn = this.menu.querySelector(`[data-parent="${originalIdx}"][data-sub="${subIdx}"]`);
+                    if (btn && subItem.onClick) {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            subItem.onClick();
+                            this.hide();
+                        });
+                    }
                 });
+            } else {
+                // Regular item
+                const btn = this.menu.querySelector(`[data-idx="${originalIdx}"]`);
+                if (btn && item.onClick) {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        item.onClick();
+                        this.hide();
+                    });
+                }
             }
+            nonDividerIndex++;
         });
 
         // Position menu

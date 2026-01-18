@@ -437,7 +437,22 @@ export class TreeNav {
                 ];
                 break;
             case 'scene':
+                const scene = this.findScene(id, parent, grandparent);
+                const hasSuggestions = scene?.suggestions?.items?.length > 0;
                 items = [
+                    {
+                        label: '🤖 Novel Agent', submenu: [
+                            { label: '📝 Expand', onClick: () => this.generateSuggestions(id, parent, grandparent, 'expand') },
+                            { label: '✂️ Shorten', onClick: () => this.generateSuggestions(id, parent, grandparent, 'shorten') },
+                            { label: '💬 Improve Dialogue', onClick: () => this.generateSuggestions(id, parent, grandparent, 'dialogue') },
+                            { label: '🌿 Add Sensory Details', onClick: () => this.generateSuggestions(id, parent, grandparent, 'sensory') },
+                            { label: '✏️ Grammar Check', onClick: () => this.generateSuggestions(id, parent, grandparent, 'grammar') },
+                            { label: '✨ Prose Improvement', onClick: () => this.generateSuggestions(id, parent, grandparent, 'prose') },
+                            { label: '🔍 General Review', onClick: () => this.generateSuggestions(id, parent, grandparent, 'review') }
+                        ]
+                    },
+                    ...(hasSuggestions ? [{ label: '🗑️ Clear All Suggestions', onClick: () => this.clearSuggestions(id, parent, grandparent) }] : []),
+                    { divider: true },
                     { label: 'Rename', onClick: () => this.rename('scene', id, parent, grandparent) },
                     { label: 'Duplicate', onClick: () => this.duplicateScene(id, parent, grandparent) },
                     { divider: true },
@@ -1221,6 +1236,153 @@ Write a clear, narrative summary of the story events in this specific part:`;
             console.error('Summary generation failed:', error);
             editor.innerHTML = originalContent;
             alert('Failed to generate summary: ' + error.message);
+        }
+    }
+
+    // ========== SCENE SUGGESTIONS ==========
+    findScene(sceneId, chapterId, partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) return null;
+        const chapter = part.chapters.find(c => c.id === chapterId);
+        if (!chapter) return null;
+        return chapter.scenes.find(s => s.id === sceneId);
+    }
+
+    async generateSuggestions(sceneId, chapterId, partId, suggestionType) {
+        const scene = this.findScene(sceneId, chapterId, partId);
+        if (!scene) {
+            alert('Scene not found');
+            return;
+        }
+
+        const content = scene.content?.replace(/<[^>]*>/g, '') || '';
+        if (!content.trim()) {
+            alert('Scene is empty. Add some content first.');
+            return;
+        }
+
+        // Check API
+        if (!this.app.aiService.isConfigured()) {
+            alert('API not configured. Please add your API key in settings.');
+            return;
+        }
+
+        // Prompt templates per type
+        const prompts = {
+            expand: 'Look for areas where the scene could be expanded with more description, detail, or depth.',
+            shorten: 'Look for areas that are overly verbose or could be trimmed while keeping the essence.',
+            dialogue: 'Focus on dialogue - suggest improvements for naturalness, subtext, and character voice.',
+            sensory: 'Look for opportunities to add sensory details (sight, sound, smell, touch, taste).',
+            grammar: 'Check for grammar, punctuation, and syntax issues.',
+            prose: 'Suggest improvements to prose style, word choice, and sentence variety.',
+            review: 'Provide a general review covering pacing, clarity, engagement, and any issues.'
+        };
+
+        const typeLabels = {
+            expand: 'Expand', shorten: 'Shorten', dialogue: 'Improve Dialogue',
+            sensory: 'Add Sensory Details', grammar: 'Grammar Check', prose: 'Prose Improvement', review: 'General Review'
+        };
+
+        const systemPrompt = `You are an editorial assistant. Analyze a scene and provide suggestions.
+
+INSTRUCTIONS:
+1. Return the ORIGINAL text with suggestions inserted
+2. Use format: [S1: note], [S2: note], etc.
+3. Number by importance: S1 = most impactful
+
+TWO TYPES OF SUGGESTIONS:
+- INLINE: Insert after the specific sentence it applies to
+- GENERAL: Put at the very end after "---" for overall pacing, structure, or theme feedback
+
+EXAMPLE OUTPUT:
+John walked home. [S1: Describe his emotional state.] The night was dark. [S2: Add sensory details.]
+
+---
+[S3: Consider adding internal monologue to increase reader connection.]
+[S4: The pacing feels rushed - add a beat of reflection before the next paragraph.]
+
+Your task: ${prompts[suggestionType]}`;
+
+        const userPrompt = `Analyze this scene for "${typeLabels[suggestionType]}":
+
+${content}
+
+Provide 4-6 suggestions:
+- Inline suggestions: right after the sentence they apply to
+- General suggestions: at the end after "---" for overall feedback
+
+Return the full text with suggestions:`;
+
+        // Show loading
+        const editor = document.getElementById('editor-content');
+        const originalEditorContent = editor.innerHTML;
+        editor.innerHTML = `
+            <div class="suggestion-generating">
+                <h2>🤖 Analyzing Scene...</h2>
+                <p>${typeLabels[suggestionType]} suggestions for "${scene.title}"</p>
+                <div class="loading-spinner"></div>
+            </div>
+        `;
+
+        try {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ];
+
+            let fullResponse = '';
+            await this.app.aiService.sendMessageStream(
+                messages,
+                (chunk, accumulated) => { fullResponse = accumulated; }
+            );
+
+            // Parse suggestions from response
+            const suggestions = this.parseSuggestions(fullResponse);
+
+            // Store BOTH the annotated text AND individual suggestions
+            scene.suggestions = {
+                type: suggestionType,
+                annotatedText: fullResponse, // Full text with inline [S#: ...] blocks
+                items: suggestions,
+                generatedAt: new Date().toISOString()
+            };
+
+            this.app.save();
+
+            // Re-load the scene to show suggestions
+            this.selectItem(this.container.querySelector(`[data-id="${sceneId}"]`));
+
+        } catch (error) {
+            console.error('Suggestion generation failed:', error);
+            editor.innerHTML = originalEditorContent;
+            alert('Failed to generate suggestions: ' + error.message);
+        }
+    }
+
+    parseSuggestions(responseText) {
+        const suggestions = [];
+        const regex = /\[S(\d+):\s*([^\]]+)\]/g;
+        let match;
+
+        while ((match = regex.exec(responseText)) !== null) {
+            suggestions.push({
+                id: `s${match[1]}`,
+                number: parseInt(match[1]),
+                text: match[2].trim(),
+                position: match.index
+            });
+        }
+
+        return suggestions;
+    }
+
+    clearSuggestions(sceneId, chapterId, partId) {
+        const scene = this.findScene(sceneId, chapterId, partId);
+        if (scene) {
+            delete scene.suggestions;
+            this.app.save();
+            // Re-load scene
+            this.selectItem(this.container.querySelector(`[data-id="${sceneId}"]`));
         }
     }
 }
