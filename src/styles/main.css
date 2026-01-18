@@ -942,26 +942,31 @@ body {
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: var(--space-xl);
+  padding: var(--space-lg);
 }
 
 .editor-page {
   width: 100%;
-  max-width: 800px;
+  max-width: 850px;
   background: var(--bg-secondary);
   box-shadow: var(--shadow-md);
   border-radius: var(--radius-lg);
   min-height: 100%;
+  height: max-content;
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-content {
+  flex: 1;
   padding: var(--space-xl) calc(var(--space-xl) * 2);
   font-family: var(--font-editor);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.8;
   color: var(--text-primary);
   min-height: 500px;
   outline: none;
+  padding-bottom: 100px;
 }
 
 .editor-content:focus {
