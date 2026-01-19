@@ -39,6 +39,12 @@
         </button>
       </div>
       <div class="top-bar-right">
+        <button class="icon-btn" id="btn-story-pulse" title="Story Pulse (Analysis Graphs)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18" />
+            <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
+          </svg>
+        </button>
         <button class="icon-btn" id="btn-thesaurus" title="Thesaurus">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -420,6 +426,47 @@
             <p class="thesaurus-hint">Enter a word and press Search to find synonyms or antonyms.</p>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Story Pulse Modal -->
+  <div class="modal story-pulse-modal" id="story-pulse-modal">
+    <div class="modal-backdrop" id="story-pulse-backdrop"></div>
+    <div class="modal-content story-pulse-content">
+      <div class="modal-header">
+        <h2>📈 Story Pulse</h2>
+        <button class="icon-btn" id="close-story-pulse">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body pulse-modal-body">
+        <div class="pulse-controls">
+          <label><input type="checkbox" value="pacing" checked> <span style="color: #FF5733">Pacing</span></label>
+          <label><input type="checkbox" value="engagement" checked> <span
+              style="color: #28B463">Engagement</span></label>
+          <label><input type="checkbox" value="enjoyability"> <span style="color: #F1C40F">Enjoyability</span></label>
+          <label><input type="checkbox" value="emotional"> <span style="color: #8E44AD">Emotional</span></label>
+          <label><input type="checkbox" value="tension" checked> <span style="color: #C0392B">Tension</span></label>
+          <label><input type="checkbox" value="atmosphere"> <span style="color: #2980B9">Atmosphere</span></label>
+          <label><input type="checkbox" value="depth"> <span style="color: #797D7F">Depth</span></label>
+        </div>
+
+        <div class="pulse-graph-container" id="pulse-graph-container">
+          <div class="pulse-placeholder">Click "Run Analysis" to generate chapter-by-chapter metrics.</div>
+        </div>
+
+        <div class="pulse-notes-container" id="pulse-notes-container">
+          <h3>AI Analysis Notes</h3>
+          <div class="pulse-placeholder">Run analysis to see detailed justifications for each metric.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="close-story-pulse-btn">Cancel</button>
+        <button class="btn btn-primary" id="btn-run-pulse">Run Analysis (Whole Book)</button>
       </div>
     </div>
   </div>

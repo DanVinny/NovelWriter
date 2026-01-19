@@ -10,6 +10,7 @@ import { Settings } from './settings/ThemeSettings.js';
 import { AIService } from './ai/AIService.js';
 import { APIConfig } from './ai/APIConfig.js';
 import { AgentPanel } from './ai/AgentPanel.js';
+import { StoryPulse } from './analytics/StoryPulse.js';
 
 class NovelWriterApp {
   constructor() {
@@ -28,6 +29,7 @@ class NovelWriterApp {
     this.aiService = new AIService(this);
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
+    this.storyPulse = new StoryPulse(this);
 
     this.bindEvents();
     this.bindSelectionEvents();
