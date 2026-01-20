@@ -32,8 +32,8 @@ class NovelWriterApp {
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
-    this.aliveEditor = new AliveEditor(this);
     this.echoChamber = new EchoChamber(this);
+    this.aliveEditor = new AliveEditor(this);
 
     this.bindEvents();
     this.bindSelectionEvents();

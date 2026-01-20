@@ -207,6 +207,11 @@ export class EchoChamber {
 
         // Scroll to bottom
         this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+
+        // Restore typing indicator if generating
+        if (this.isGenerating) {
+            this.showTypingIndicator();
+        }
     }
 
     appendMessageToDOM(msg) {
@@ -295,6 +300,7 @@ export class EchoChamber {
 
     onLettersTyped(count) {
         if (!this.isActive) return;
+        if (this.isGenerating) return; // Block if already generating
 
         this.letterCounter += count;
 
@@ -570,10 +576,11 @@ export class EchoChamber {
         const metadata = this.formatMetadata(currentState.metadata);
         const prevMetadata = this.previousState ? this.formatMetadata(this.previousState.metadata) : 'N/A (First trigger)';
 
-        // Store current state as previous for next trigger
-        this.previousState = currentState;
+        // Note: previousState is updated in triggerReaction AFTER successful response
+        // to prevent race conditions from skipping changes
 
         return {
+            currentState, // Pass this so triggerReaction can update previousState after success
             manuscript,
             changedChaptersContext,
             sceneFocus,
@@ -627,7 +634,7 @@ export class EchoChamber {
             `${r.emoji} **${r.name}** - ${r.personality}\n   Style: ${r.style}`
         ).join('\n\n');
 
-        return `You are simulating a GROUP CHAT of 5 passionate readers who have been following a novel-in-progress. They're reuniting in their private chat to read the latest from the author.
+        return `You are simulating a GROUP CHAT of 5 obsessed readers who have been following a novel-in-progress. They are reuniting in their private chat to read the latest from the author.
 
 ═══════════════════════════════════════════════════════
 THE READERS (embody each one's unique voice):
@@ -651,17 +658,24 @@ ${context.metadata}
 YOUR TASK: Generate 10 opening messages
 ═══════════════════════════════════════════════════════
 
-Create a natural group chat conversation as the readers gather to read more. They should:
+Create a high-energy group chat conversation as the readers gather. Do NOT sound generic.
 
-1. **Act like they've read everything above** - Reference SPECIFIC events, characters, dialogue, and scenes from the manuscript. NO GENERIC STATEMENTS like "that fight scene was cool." Be specific: "That moment when [character] said [actual quote] gave me chills."
+RULES FOR REALISM:
+1. **PROVE YOU READ IT**: You MUST quote or reference specific details.
+   - Mention a character's quirk (e.g., "I hope we see more of [Name]'s [specific trait] today.")
+   - Quote a memorable line from a previous chapter.
+   - Reference a specific cliffhanger or unresolved subplot.
 
-2. **Show genuine excitement** - They're fans reuniting. Banter with each other. Disagree sometimes. Ship characters. Theorize.
+2. **DIVERSE REACTIONS**:
+   - **Alex** should summarize where the plot left off ("Last time we saw [X] doing [Y]...").
+   - **Sam** should immediately ask about a relationship status or chemistry ("If [A] and [B] don't kiss today I swear...").
+   - **Max** should worry about a logical inconsistency or plot hole.
+   - **Jordan** should bring up a lore detail from Chapter 1 that connects to now.
+   - **Riley** should just be vibrating with hype.
 
-3. **Reference the LATEST content more heavily** - The final 2-3 messages should specifically anticipate what might happen next in the most recent chapter/scene.
+3. **ANTICIPATE**: The final 2-3 messages must speculate on what the author is about to write in the *current* focused scene. "They're opening up [Scene Name]... oh god, is this where [Event] happens?"
 
-4. **End with anticipation** - The last messages should express excitement to see what the author writes today.
-
-5. **Stay in character** - Alex analyzes, Sam ships, Max is skeptical, Riley hypes, Jordan tracks lore.
+4. **NO ROBOTIC PRAISE**: Don't just say "This story is amazing." Say "I'm essentially holding my breath until [Character] confesses."
 
 ═══════════════════════════════════════════════════════
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
@@ -670,10 +684,7 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 MESSAGES:
 🧐 Alex: [message text]
 😍 Sam: [message text]
-🤨 Max: [message text]
-🎉 Riley: [message text]
-📚 Jordan: [message text]
-...continue for 10 messages total, mixing up the order naturally...
+...continue for 10 messages total...
 
 (No LOG section for opening messages)`;
     }
@@ -779,23 +790,30 @@ ${context.chatHistory}
 YOUR TASK: React to what happened + Log the changes
 ═══════════════════════════════════════════════════════
 
-Generate 5-10 messages as the readers react to the NEW CONTENT. You must:
+Generate 5-10 messages. You are watching the text appear/disappear live.
 
-1. **PRIORITIZE DETECTED CHANGES** - If scenes were added/deleted, chapters changed, or significant content was written—REACT TO IT FIRST. Compare the previous chapter content with current to see exactly what changed.
+CRITICAL INSTRUCTIONS:
 
-2. **BE SPECIFIC** - Reference actual new text, character names, dialogue, events. Don't be vague.
+1. **ANALYZE THE DIFF**: Look closely at the "CHANGED CHAPTERS" section.
+   - If text was ADDED: React to the *specific words*. "Omg, [Character] actually said [Quote]!!"
+   - If text was DELETED: FREAK OUT if it was important. "Wait, they deleted the kiss scene?? NOOO!"
+   - If a scene was REWRITTEN: Comment on the improvement (or complain if you liked the old version).
 
-3. **BREAK THE 4TH WALL** - You're watching the author write in real-time. Comment on things like:
-   - "Wait, did they just add a whole new scene?"
-   - "Oof, that scene got scrapped..."
-   - "The pacing is picking up!"
-   - "Are they going back to edit chapter 2?"
+2. **CONNECT THE DOTS**:
+   - If a new character mentions an object from Chapter 1, **Jordan** should notice.
+   - If two characters touch, **Sam** should scream.
+   - If a plot twist happens, **Alex** should claim they predicted it.
 
-4. **REACT NATURALLY** - Banter with each other. Disagree. Get excited. Get worried. Theorize about where this is going.
+3. **BE REACTIVE, NOT DESCRIPTIVE**:
+   - BAD: "The author added a new scene where John walks in."
+   - GOOD: "JOHN IS BACK?? I thought he was dead!"
 
-5. **STAY IN CHARACTER** - Alex analyzes structure, Sam ships, Max is skeptical, Riley hypes, Jordan tracks lore.
+4. **BREAK THE 4TH WALL (Subtly)**:
+   - "The author is typing so fast right now."
+   - "Why did they pause after *that* line? That's cruel."
+   - "Did they just delete that whole paragraph? Ouch."
 
-6. **GENERATE LOG ENTRIES** - After messages, create concise log entries describing what changed this trigger. If nothing changed, log that too (e.g., "No progress - author idle").
+5. **Reference Previous Chat**: If Sam was hoping for a scene earlier, and it happens now, Riley should say "Sam, you got your wish!"
 
 ═══════════════════════════════════════════════════════
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
@@ -868,7 +886,12 @@ LOG:
 
         try {
             const context = this.buildReactionContext();
-            if (!context) return;
+            if (!context) {
+                this.isGenerating = false;
+                this.updateStatus();
+                this.hideTypingIndicator();
+                return;
+            }
 
             // Debug: Log detected changes
             console.log('Echo Chamber - Detected changes:', context.changes);
@@ -886,6 +909,10 @@ LOG:
             // Parse messages and log
             this.parseAndAddMessages(response, conv);
             this.parseAndAddLog(response, conv);
+
+            // Now that we've successfully parsed, update previousState
+            // This prevents skipping changes if a request fails or overlaps
+            this.previousState = context.currentState;
 
             this.app.save();
             this.renderConversation(conv);
@@ -1010,6 +1037,10 @@ LOG:
 
     showTypingIndicator() {
         if (!this.chatContainer) return;
+
+        // Remove existing to prevent duplicates
+        document.getElementById('echo-typing-indicator')?.remove();
+
         const indicator = document.createElement('div');
         indicator.className = 'echo-typing';
         indicator.id = 'echo-typing-indicator';
