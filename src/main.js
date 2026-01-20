@@ -13,6 +13,7 @@ import { APIConfig } from './ai/APIConfig.js';
 import { AgentPanel } from './ai/AgentPanel.js';
 import { ImageService } from './ai/ImageService.js';
 import { StoryPulse } from './analytics/StoryPulse.js';
+import { PlotTracker } from './analytics/PlotTracker.js';
 import { AliveEditor } from './alive/AliveEditor.js';
 import { EchoChamber } from './alive/EchoChamber.js';
 import { ConnectionWeb } from './graph/ConnectionWeb.js';
@@ -37,6 +38,7 @@ class NovelWriterApp {
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
+    this.plotTracker = new PlotTracker(this);
     this.echoChamber = new EchoChamber(this);
     this.aliveEditor = new AliveEditor(this);
     this.connectionWeb = new ConnectionWeb(this);

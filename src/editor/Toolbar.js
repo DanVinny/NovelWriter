@@ -32,6 +32,7 @@ export class Toolbar {
 
         this.bindEvents();
         this.addColorPicker();
+        this.addHighlightPicker();
     }
 
     bindEvents() {
@@ -259,6 +260,98 @@ export class Toolbar {
         });
     }
 
+    addHighlightPicker() {
+        const toolbarGroup = document.querySelector('.toolbar-color-picker').parentElement;
+
+        const highlightPickerHtml = `
+      <div class="toolbar-color-picker">
+        <button class="toolbar-color-btn" id="btn-highlight-color" title="Highlight Color">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-bottom:2px">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+            <path d="M2 2l7.5 7.5"></path>
+            <path d="M2 2l13.5 13.5"></path>
+          </svg>
+          <span class="color-bar" style="background: transparent;"></span>
+        </button>
+        <div class="color-picker-dropdown" id="highlight-dropdown">
+          <div class="color-picker-grid">
+            ${this.generateHighlightSwatches()}
+          </div>
+        </div>
+      </div>
+    `;
+
+        // Append to existing group for compactness
+        const container = document.createElement('div');
+        container.innerHTML = highlightPickerHtml;
+        toolbarGroup.appendChild(container.firstElementChild);
+
+        const highlightBtn = document.getElementById('btn-highlight-color');
+        const dropdown = document.getElementById('highlight-dropdown');
+
+        highlightBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.saveSelection();
+
+            // Close other dropdown
+            document.getElementById('color-dropdown')?.classList.remove('open');
+
+            dropdown.classList.toggle('open');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.toolbar-color-picker')) {
+                dropdown.classList.remove('open');
+            }
+        });
+
+        dropdown.querySelectorAll('.color-picker-swatch').forEach(swatch => {
+            swatch.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const color = swatch.dataset.color;
+
+                highlightBtn.querySelector('.color-bar').style.background = color === 'transparent' ? 'transparent' : color;
+                dropdown.classList.remove('open');
+
+                this.restoreSelection();
+
+                if (color === 'transparent') {
+                    document.execCommand('hiliteColor', false, 'transparent'); // Remove background
+                    document.execCommand('removeFormat', false, null); // Sometimes needed for bg (careful)
+                    // Better: use 'hiliteColor' with transparent/white often just works
+                } else {
+                    document.execCommand('hiliteColor', false, color);
+                }
+            });
+        });
+    }
+
+    generateHighlightSwatches() {
+        const colors = [
+            'transparent',
+            '#ffff00', '#00ff00', '#00ffff', '#ff00ff', '#ff0000',
+            '#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc',
+            '#dd7e6b', '#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a2c4c9', '#a4c2f4', '#9fc5e8', '#b4a7d6', '#d5a6bd',
+            '#cc4125', '#e06666', '#f6b26b', '#ffd966', '#93c47d', '#76a5af', '#6d9eeb', '#6fa8dc', '#8e7cc3', '#c27ba0',
+        ];
+
+        return colors.map(color => {
+            let title = color;
+            let style = `background: ${color};`;
+            let content = '';
+
+            if (color === 'transparent') {
+                title = 'None';
+                style = `background: repeating-linear-gradient(45deg, #fff, #fff 5px, #eee 5px, #eee 10px); color: red; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold;`;
+                content = '×';
+            }
+
+            return `<div class="color-picker-swatch" data-color="${color}" title="${title}" style="${style}">${content}</div>`;
+        }).join('');
+    }
     generateColorSwatches() {
         const colors = [
             'auto', // Special value for default/reset

@@ -51,18 +51,30 @@ export class EventLine {
             return;
         }
 
-        // Build the horizontal event line
+        // Build the horizontal event line with type-based coloring
         let html = `<div class="event-line-track">`;
 
         events.forEach((event, index) => {
             const position = index % 2 === 0 ? 'above' : 'below';
-            const gapClass = event.gap ? `gap-${event.gap}` : '';
+            const type = event.type || 'setup';
+            const gap = event.gap || 'soon';
+
+            // Add connector segment (not for first node)
+            if (index > 0) {
+                const prevType = events[index - 1].type || 'setup';
+                const fromColor = this.getTypeColor(prevType);
+                const toColor = this.getTypeColor(type);
+                const gradientStyle = `background: linear-gradient(90deg, ${fromColor}, ${toColor});`;
+                html += `<div class="event-segment gap-${gap}" style="${gradientStyle}"></div>`;
+            }
 
             html += `
-                <div class="event-node ${position} ${gapClass}" data-index="${index}">
+                <div class="event-node ${position} type-${type}" data-index="${index}">
                     <div class="event-dot"></div>
+                    <div class="event-glow"></div>
                     <div class="event-title">${event.title}</div>
                     <div class="event-popup">
+                        <div class="popup-type type-${type}">${this.getTypeLabel(type)}</div>
                         <strong>${event.title}</strong>
                         <p>${event.description || 'No description'}</p>
                         ${event.gap ? `<span class="event-gap-label">${this.getGapLabel(event.gap)}</span>` : ''}
@@ -79,6 +91,52 @@ export class EventLine {
             node.addEventListener('mouseenter', () => node.classList.add('show-popup'));
             node.addEventListener('mouseleave', () => node.classList.remove('show-popup'));
         });
+
+        // Horizontal scroll with wheel
+        this.container.addEventListener('wheel', (e) => {
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                this.container.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+    }
+
+    getTypeLabel(type) {
+        const labels = {
+            'action': '⚔️ ACTION',
+            'conflict': '💢 CONFLICT',
+            'chase': '🏃 CHASE',
+            'reveal': '💡 REVEAL',
+            'mystery': '🔍 MYSTERY',
+            'decision': '⚖️ DECISION',
+            'betrayal': '🗡️ BETRAYAL',
+            'death': '💀 DEATH',
+            'victory': '🏆 VICTORY',
+            'defeat': '💥 DEFEAT',
+            'emotional': '💔 EMOTIONAL',
+            'calm': '🌿 CALM',
+            'setup': '📍 SETUP'
+        };
+        return labels[type] || type.toUpperCase();
+    }
+
+    getTypeColor(type) {
+        const colors = {
+            'action': '#ef4444',
+            'conflict': '#f97316',
+            'chase': '#eab308',
+            'reveal': '#ea00ff',
+            'mystery': '#8b5cf6',
+            'decision': '#6366f1',
+            'betrayal': '#ec4899',
+            'death': '#78716c',
+            'victory': '#fbbf24',
+            'defeat': '#64748b',
+            'emotional': '#06b6d4',
+            'calm': '#22c55e',
+            'setup': '#3b82f6'
+        };
+        return colors[type] || '#888888';
     }
 
     getGapLabel(gap) {
@@ -192,25 +250,36 @@ export class EventLine {
 For each event, provide:
 1. A SHORT TITLE (2-5 words, action-focused)
 2. A BRIEF DESCRIPTION (1-2 sentences)
-3. A GAP indicator showing time relation to the previous event:
-   - "immediate" = happens right after
-   - "soon" = shortly after (same day/scene)
-   - "later" = some time passes (days/weeks)
+3. A TYPE category (pick the BEST fit):
+   - "action": Battles, fights, combat
+   - "conflict": Arguments, confrontations, tension
+   - "chase": Pursuits, escapes, fleeing
+   - "reveal": Secrets exposed, plot twists
+   - "mystery": Clues found, questions raised
+   - "decision": Important choices made
+   - "betrayal": Treachery, backstabbing
+   - "death": Character death, major loss
+   - "victory": Triumph, achievement, success
+   - "defeat": Failure, setback, loss
+   - "emotional": Bonding, romance, grief, internal conflict
+   - "calm": Peaceful moments, rest, reflection, recovery
+   - "setup": Travel, exposition, introductions, planning
+4. A GAP indicator showing time to previous event:
+   - "immediate" = right after
+   - "soon" = same day/scene
+   - "later" = days/weeks pass
    - "skip" = significant time jump
 
 OUTPUT FORMAT (JSON array):
 [
-  {"title": "Event Title", "description": "Brief description of what happens.", "gap": "immediate"},
-  {"title": "Another Event", "description": "What happens here.", "gap": "later"},
+  {"title": "Event Title", "description": "What happens.", "type": "action", "gap": "immediate"},
   ...
 ]
 
 RULES:
-- Extract 10-30 meaningful events (major plot points, reveals, turning points)
-- Events should be ACTIONS, not settings or descriptions
-- Keep titles punchy and memorable
-- First event has no gap indicator
-- Output ONLY the JSON array, no other text
+- Extract 10-30 meaningful events
+- First event has no gap
+- Output ONLY the JSON array
 
 MANUSCRIPT:
 ${context.substring(0, 50000)}`;
@@ -227,10 +296,12 @@ ${context.substring(0, 50000)}`;
 
             const events = JSON.parse(jsonMatch[0]);
 
-            // Validate structure
+            // Validate structure and include type
+            const validTypes = ['action', 'conflict', 'chase', 'reveal', 'mystery', 'decision', 'betrayal', 'death', 'victory', 'defeat', 'emotional', 'calm', 'setup'];
             return events.filter(e => e.title && typeof e.title === 'string').map((e, i) => ({
                 title: e.title.substring(0, 50),
                 description: (e.description || '').substring(0, 200),
+                type: validTypes.includes(e.type) ? e.type : 'setup',
                 gap: i === 0 ? null : (e.gap || 'soon')
             }));
         } catch (error) {

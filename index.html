@@ -47,6 +47,12 @@
             <circle cx="18" cy="12" r="2" />
           </svg>
         </button>
+        <button class="icon-btn" id="btn-plot-tracker" title="Plot Tracker (Plot Lines & Holes)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </button>
         <button class="icon-btn" id="btn-story-pulse" title="Story Pulse (Analysis Graphs)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 3v18h18" />
@@ -291,6 +297,33 @@
         <div class="event-line-empty">
           <p>No events extracted yet.</p>
           <p>Click <strong>Generate / Update</strong> to scan your manuscript and build the event line.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plot Tracker Modal (Fullscreen) -->
+    <div class="fullscreen-modal" id="plot-tracker-modal">
+      <div class="fullscreen-modal-header">
+        <h2>🔍 Plot Tracker</h2>
+        <div class="fullscreen-modal-controls">
+          <button class="btn btn-sm" id="btn-scan-plots">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+            </svg>
+            Scan Manuscript
+          </button>
+          <button class="icon-btn" id="close-plot-tracker" title="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="plot-tracker-container" id="plot-tracker-container">
+        <div class="plot-tracker-empty">
+          <p>No plot analysis yet.</p>
+          <p>Click <strong>Scan Manuscript</strong> to analyze your story for plot lines and potential holes.</p>
         </div>
       </div>
     </div>
