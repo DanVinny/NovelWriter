@@ -23,6 +23,12 @@ export class APIConfig {
         this.aliveApiKey = document.getElementById('setting-alive-apikey');
         this.aliveModel = document.getElementById('setting-alive-model');
 
+        // Image Model form elements
+        this.imageProvider = document.getElementById('setting-image-provider');
+        this.imageApiKey = document.getElementById('setting-image-apikey');
+        this.imageModel = document.getElementById('setting-image-model');
+        this.imageStyle = document.getElementById('setting-image-style');
+
         this.bindEvents();
     }
 
@@ -92,6 +98,20 @@ export class APIConfig {
             this.aliveModel.value = state.settings.aliveModel || '';
         }
 
+        // Load Image Model settings
+        if (this.imageProvider) {
+            this.imageProvider.value = state.settings.imageProvider || '';
+        }
+        if (this.imageApiKey) {
+            this.imageApiKey.value = state.settings.imageApiKey || '';
+        }
+        if (this.imageModel) {
+            this.imageModel.value = state.settings.imageModel || '';
+        }
+        if (this.imageStyle) {
+            this.imageStyle.value = state.settings.imageStylePrefix || '';
+        }
+
         // Reset connection status
         if (this.connectionStatus) {
             this.connectionStatus.textContent = '';
@@ -128,6 +148,20 @@ export class APIConfig {
         }
         if (this.aliveModel) {
             state.settings.aliveModel = this.aliveModel.value.trim();
+        }
+
+        // Update Image Model settings
+        if (this.imageProvider) {
+            state.settings.imageProvider = this.imageProvider.value.trim();
+        }
+        if (this.imageApiKey) {
+            state.settings.imageApiKey = this.imageApiKey.value.trim();
+        }
+        if (this.imageModel) {
+            state.settings.imageModel = this.imageModel.value.trim();
+        }
+        if (this.imageStyle) {
+            state.settings.imageStylePrefix = this.imageStyle.value.trim();
         }
 
         // Update AIService

@@ -4,16 +4,19 @@
  */
 
 import { Storage } from './storage/LocalStorage.js';
+import { BackupService } from './storage/BackupService.js';
 import { TreeNav } from './navigation/TreeNav.js';
 import { Toolbar } from './editor/Toolbar.js';
 import { Settings } from './settings/ThemeSettings.js';
 import { AIService } from './ai/AIService.js';
 import { APIConfig } from './ai/APIConfig.js';
 import { AgentPanel } from './ai/AgentPanel.js';
+import { ImageService } from './ai/ImageService.js';
 import { StoryPulse } from './analytics/StoryPulse.js';
 import { AliveEditor } from './alive/AliveEditor.js';
 import { EchoChamber } from './alive/EchoChamber.js';
 import { ConnectionWeb } from './graph/ConnectionWeb.js';
+import { EventLine } from './graph/EventLine.js';
 
 class NovelWriterApp {
   constructor() {
@@ -30,12 +33,15 @@ class NovelWriterApp {
     this.toolbar = new Toolbar(this);
     this.settings = new Settings(this);
     this.aiService = new AIService(this);
+    this.imageService = new ImageService(this);
     this.apiConfig = new APIConfig(this);
     this.agentPanel = new AgentPanel(this);
     this.storyPulse = new StoryPulse(this);
     this.echoChamber = new EchoChamber(this);
     this.aliveEditor = new AliveEditor(this);
     this.connectionWeb = new ConnectionWeb(this);
+    this.eventLine = new EventLine(this);
+    this.backupService = new BackupService(this);
 
     this.bindEvents();
     this.bindSelectionEvents();
@@ -405,8 +411,16 @@ class NovelWriterApp {
         <h2 class="reading-part-title">${part.displayTitle || part.title}</h2>`;
 
       part.chapters.forEach(chapter => {
+        // Add mood art if exists
+        const moodArtHtml = chapter.moodArt ? `
+          <div class="reading-chapter-mood-art">
+            <img src="${chapter.moodArt.imageData}" alt="Chapter Mood" />
+          </div>
+        ` : '';
+
         html += `<div class="reading-chapter">
-          <h3 class="reading-chapter-title">${chapter.displayTitle || chapter.title}</h3>`;
+          <h3 class="reading-chapter-title">${chapter.displayTitle || chapter.title}</h3>
+          ${moodArtHtml}`;
 
         chapter.scenes.forEach((scene, i) => {
           html += `<div class="reading-scene">
@@ -627,9 +641,21 @@ class NovelWriterApp {
     const editor = document.getElementById('editor-content');
     if (!chapter.displayTitle) chapter.displayTitle = chapter.title;
 
+    // Build mood art section if exists
+    const moodArtSection = chapter.moodArt ? `
+      <div class="chapter-mood-art-display">
+        <img src="${chapter.moodArt.imageData}" alt="Chapter Mood Art" class="chapter-mood-art-image" />
+        <div class="chapter-mood-art-caption">
+          <span class="mood-art-label">🎨 Mood Art</span>
+          <span class="mood-art-prompt-preview" title="${chapter.moodArt.prompt}">${chapter.moodArt.prompt?.substring(0, 60)}...</span>
+        </div>
+      </div>
+    ` : '';
+
     let html = `<div class="chapter-view">
       <input type="text" class="chapter-title-input" id="edit-chapter-title" 
              value="${chapter.displayTitle}" placeholder="Enter chapter title...">
+      ${moodArtSection}
       <div class="chapter-scenes-list">
     `;
 

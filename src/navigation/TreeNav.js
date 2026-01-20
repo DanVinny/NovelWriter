@@ -248,7 +248,19 @@ export class TreeNav {
 
             part.chapters.forEach(chapter => {
                 const chapterCollapsed = this.isCollapsed(chapter.id);
-                html += this.renderItem({ section: 'manuscript', id: chapter.id, type: 'chapter', label: chapter.title, icon: 'file', depth: 2, parent: part.id, draggable: true, collapsible: true, isCollapsed: chapterCollapsed });
+                html += this.renderItem({
+                    section: 'manuscript',
+                    id: chapter.id,
+                    type: 'chapter',
+                    label: chapter.title,
+                    icon: 'file',
+                    depth: 2,
+                    parent: part.id,
+                    draggable: true,
+                    collapsible: true,
+                    isCollapsed: chapterCollapsed,
+                    moodArt: chapter.moodArt?.imageData
+                });
 
                 // Collapsible container for scenes (collapsed if chapter is collapsed)
                 html += `<div class="tree-children${chapterCollapsed ? ' collapsed' : ''}" data-parent="${chapter.id}">`;
@@ -383,7 +395,7 @@ export class TreeNav {
         ).join('');
     }
 
-    renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false, collapsible = false, isCollapsed = false }) {
+    renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false, collapsible = false, isCollapsed = false, moodArt = null }) {
         const icons = {
             book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
             part: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M12 6v7"/><path d="M8 9h8"/>',
@@ -410,6 +422,9 @@ export class TreeNav {
             </svg>
         ` : '';
 
+        // Mood art thumbnail for chapters
+        const moodArtThumb = moodArt ? `<img class="chapter-mood-thumb" src="${moodArt}" alt="Mood" />` : '';
+
         return `
       <div class="tree-item ${type === 'book' ? 'tree-item-book' : ''} ${collapsible ? 'tree-item-collapsible' : ''}${collapsedClass}" 
            data-section="${section}" data-id="${id}" data-type="${type}" 
@@ -417,6 +432,7 @@ export class TreeNav {
            style="padding-left: ${paddingLeft}px;"
            ${draggable ? 'draggable="true"' : ''}>
         ${collapseToggle}
+        ${moodArtThumb}
         <svg class="tree-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           ${icons[icon] || icons.doc}
         </svg>
@@ -485,8 +501,14 @@ export class TreeNav {
                 ];
                 break;
             case 'chapter':
+                const chapter = this.findChapter(id, parent);
+                const hasMoodArt = !!chapter?.moodArt;
                 items = [
                     { label: 'Add Scene', onClick: () => this.addScene(id, parent) },
+                    { divider: true },
+                    { label: hasMoodArt ? '🎨 Regenerate Mood Art' : '🎨 Generate Mood Art', onClick: () => this.generateChapterMoodArt(id, parent) },
+                    { label: '🖼️ Select from Gallery', onClick: () => this.openArtGallery(id, parent) },
+                    ...(hasMoodArt ? [{ label: '❌ Remove Mood Art', onClick: () => this.removeMoodArt(id, parent) }] : []),
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('chapter', id, parent) },
                     { label: 'Delete', onClick: () => this.deleteChapter(id, parent) }
@@ -1302,6 +1324,211 @@ Write a clear, narrative summary of the story events in this specific part:`;
             editor.innerHTML = originalContent;
             alert('Failed to generate summary: ' + error.message);
         }
+    }
+
+    // ========== CHAPTER MOOD ART ==========
+    findChapter(chapterId, partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) return null;
+        return part.chapters.find(c => c.id === chapterId);
+    }
+
+    async generateChapterMoodArt(chapterId, partId) {
+        const chapter = this.findChapter(chapterId, partId);
+        if (!chapter) {
+            alert('Chapter not found');
+            return;
+        }
+
+        // Gather all scene content for this chapter
+        const chapterContent = chapter.scenes
+            .map(s => s.content?.replace(/<[^>]*>/g, '') || '')
+            .join('\n\n');
+
+        if (!chapterContent.trim()) {
+            alert('Chapter has no content. Add some scenes first.');
+            return;
+        }
+
+        // Check Image API
+        if (!this.app.imageService.isConfigured()) {
+            alert('Image API not configured. Please add settings in API Configuration.');
+            return;
+        }
+
+        // Show loading state in editor
+        const editor = document.getElementById('editor-content');
+        const originalContent = editor.innerHTML;
+        editor.innerHTML = `
+            <div class="mood-art-generating">
+                <h2>🎨 Generating Mood Art...</h2>
+                <p>Analyzing "${chapter.title}" and creating visual prompt...</p>
+                <div class="loading-spinner"></div>
+            </div>
+        `;
+
+        try {
+            // Call ImageService two-step pipeline
+            const result = await this.app.imageService.generateChapterArt(chapterContent, chapter.title);
+
+            // Save to global gallery (use styled prompt for "View Prompt" feature)
+            this.app.imageService.addToGallery(result.imageData, result.styledPrompt, {
+                chapterId,
+                chapterTitle: chapter.title,
+                originalPrompt: result.prompt
+            });
+
+            // Store mood art on chapter
+            chapter.moodArt = result;
+
+            this.app.save();
+            this.render();
+
+            // Show success with the generated art
+            editor.innerHTML = `
+                <div class="mood-art-result">
+                    <h2>🎨 Mood Art Generated!</h2>
+                    <div class="mood-art-preview">
+                        <img src="${result.imageData}" alt="Chapter Mood Art" />
+                    </div>
+                    <div class="mood-art-prompt">
+                        <strong>Generated Prompt:</strong>
+                        <p>${result.styledPrompt}</p>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Mood art generation failed:', error);
+            editor.innerHTML = originalContent;
+            alert('Failed to generate mood art: ' + error.message);
+        }
+    }
+
+    removeMoodArt(chapterId, partId) {
+        const chapter = this.findChapter(chapterId, partId);
+        if (chapter && chapter.moodArt) {
+            if (confirm('Remove mood art from this chapter?')) {
+                delete chapter.moodArt;
+                this.app.save();
+                this.render();
+                // Refresh chapter view if active
+                if (this.app.currentContext?.chapterId === chapterId) {
+                    this.app.loadChapterView(partId, chapterId);
+                }
+            }
+        }
+    }
+
+    openArtGallery(chapterId, partId) {
+        const chapter = this.findChapter(chapterId, partId);
+        if (!chapter) return;
+
+        const modal = document.getElementById('image-gallery-modal');
+        const grid = document.getElementById('gallery-grid');
+        const closeBtn = document.getElementById('close-image-gallery');
+        const gallery = this.app.imageService.getGallery();
+
+        // Close modal helper
+        const closeModal = () => {
+            modal.classList.remove('open');
+            grid.innerHTML = '';
+        };
+
+        const renderGallery = () => {
+            const galleryItems = this.app.imageService.getGallery();
+            if (galleryItems.length === 0) {
+                grid.innerHTML = '<div class="gallery-empty">No images generated yet.</div>';
+                return;
+            }
+
+            grid.innerHTML = galleryItems.map(item => `
+                <div class="gallery-item" data-id="${item.id}">
+                    <img src="${item.imageData}" alt="Mood Art" loading="lazy" class="gallery-img">
+                    <div class="gallery-item-info">
+                        ${new Date(item.timestamp).toLocaleDateString()}
+                    </div>
+                    <div class="gallery-item-menu-btn" title="Options">⋮</div>
+                    <div class="gallery-item-menu">
+                        <div class="gallery-menu-option view-prompt" data-id="${item.id}">👀 View Prompt</div>
+                        <div class="gallery-menu-option delete-image" data-id="${item.id}">🗑️ Delete</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add click handlers for selection (on image)
+            grid.querySelectorAll('.gallery-img').forEach(img => {
+                img.addEventListener('click', (e) => {
+                    const id = e.target.closest('.gallery-item').dataset.id;
+                    const item = galleryItems.find(i => i.id === id);
+                    if (item) {
+                        chapter.moodArt = {
+                            imageData: item.imageData,
+                            prompt: item.meta?.originalPrompt || item.prompt, // fallback
+                            styledPrompt: item.prompt, // We stored full styled prompt here
+                            generatedAt: item.timestamp
+                        };
+                        this.app.save();
+                        this.render();
+                        if (this.app.currentContext?.chapterId === chapterId) {
+                            this.app.loadChapterView(partId, chapterId);
+                        }
+                        closeModal();
+                    }
+                });
+            });
+
+            // Menu handlers
+            grid.querySelectorAll('.gallery-item-menu-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Close other menus
+                    grid.querySelectorAll('.gallery-item.show-menu').forEach(el => {
+                        if (el !== e.target.closest('.gallery-item')) el.classList.remove('show-menu');
+                    });
+                    e.target.closest('.gallery-item').classList.toggle('show-menu');
+                });
+            });
+
+            // View Prompt handler
+            grid.querySelectorAll('.view-prompt').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = e.target.dataset.id;
+                    const item = galleryItems.find(i => i.id === id);
+                    if (item) {
+                        alert(`Prompt:\n\n${item.prompt}`);
+                    }
+                    e.target.closest('.gallery-item').classList.remove('show-menu');
+                });
+            });
+
+            // Delete handler
+            grid.querySelectorAll('.delete-image').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = e.target.dataset.id;
+                    if (confirm('Delete image from gallery?')) {
+                        this.app.imageService.removeFromGallery(id);
+                        renderGallery(); // Re-render
+                    }
+                });
+            });
+        };
+
+        renderGallery();
+
+        // Close menus when clicking elsewhere
+        grid.onclick = (e) => {
+            if (!e.target.closest('.gallery-item-menu-btn')) {
+                grid.querySelectorAll('.gallery-item.show-menu').forEach(el => el.classList.remove('show-menu'));
+            }
+        };
+
+        // Bind closing events
+        closeBtn.onclick = closeModal;
+        modal.querySelector('.modal-backdrop').onclick = closeModal;
+
+        modal.classList.add('open');
     }
 
     // ========== SCENE SUGGESTIONS ==========

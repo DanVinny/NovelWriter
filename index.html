@@ -39,6 +39,14 @@
         </button>
       </div>
       <div class="top-bar-right">
+        <button class="icon-btn" id="btn-event-line" title="Event Line (Story Events)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <circle cx="6" cy="12" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="18" cy="12" r="2" />
+          </svg>
+        </button>
         <button class="icon-btn" id="btn-story-pulse" title="Story Pulse (Analysis Graphs)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 3v18h18" />
@@ -260,6 +268,33 @@
       </div>
     </main>
 
+    <!-- Event Line Modal (Fullscreen) -->
+    <div class="fullscreen-modal" id="event-line-modal">
+      <div class="fullscreen-modal-header">
+        <h2>📊 Event Line</h2>
+        <div class="fullscreen-modal-controls">
+          <button class="btn btn-sm" id="btn-generate-events">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+            </svg>
+            Generate / Update
+          </button>
+          <button class="icon-btn" id="close-event-line" title="Close">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="event-line-container" id="event-line-container">
+        <div class="event-line-empty">
+          <p>No events extracted yet.</p>
+          <p>Click <strong>Generate / Update</strong> to scan your manuscript and build the event line.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings Modal -->
     <div class="modal" id="settings-modal">
       <div class="modal-backdrop"></div>
@@ -322,180 +357,276 @@
                 <span class="setting-hint">letters</span>
               </div>
             </div>
-
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" id="save-settings">Save Settings</button>
+
+          <h3>💾 Backup</h3>
+          <p class="settings-description">Protect your work with manual backups.</p>
+          <div class="setting-row">
+            <label>Download Backup</label>
+            <button class="btn btn-sm" id="btn-manual-backup">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Backup Now
+            </button>
+          </div>
+          <div class="setting-row">
+            <label>Restore from Backup</label>
+            <input type="file" id="backup-file-input" accept=".json" style="display: none;" />
+            <button class="btn btn-sm btn-secondary" id="btn-restore-backup">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Restore
+            </button>
+          </div>
+
         </div>
       </div>
-    </div>
-
-    <!-- API Configuration Modal -->
-    <div class="modal" id="api-config-modal">
-      <div class="modal-backdrop"></div>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>API Configuration</h2>
-          <button class="modal-close" id="close-api-config">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="settings-section">
-            <p class="settings-description">Configure your AI provider connection. Works with any OpenAI-compatible API.
-            </p>
-            <div class="setting-row">
-              <label>Provider URL</label>
-              <input type="text" id="setting-ai-provider" placeholder="e.g., https://api.nano-gpt.com/v1" />
-            </div>
-            <div class="setting-row">
-              <label>API Key</label>
-              <div class="api-key-input">
-                <input type="password" id="setting-ai-apikey" placeholder="Enter your API key" />
-                <button type="button" class="btn-icon" id="toggle-apikey-visibility" title="Show/Hide">
-                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <label>Model ID</label>
-              <input type="text" id="setting-ai-model" placeholder="e.g., glm-4.7, gpt-4o, claude-3-5-sonnet" />
-            </div>
-            <div class="setting-row setting-row-actions">
-              <button type="button" class="btn btn-secondary" id="test-ai-connection">Test Connection</button>
-              <span id="ai-connection-status"></span>
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <h3>Alive Editor Model (Optional)</h3>
-            <p class="settings-description">Faster model for real-time features. Leave blank to use main model.</p>
-            <div class="setting-row">
-              <label>Provider URL</label>
-              <input type="text" id="setting-alive-provider" placeholder="Same as above if blank" />
-            </div>
-            <div class="setting-row">
-              <label>API Key</label>
-              <input type="password" id="setting-alive-apikey" placeholder="Same as above if blank" />
-            </div>
-            <div class="setting-row">
-              <label>Model ID</label>
-              <input type="text" id="setting-alive-model" placeholder="e.g., gpt-4o-mini, gemini-flash" />
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" id="save-api-config">Save Configuration</button>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="save-settings">Save Settings</button>
       </div>
     </div>
+  </div>
 
-    <!-- Reading Mode Modal -->
-    <div class="reading-modal" id="reading-modal">
-      <div class="reading-modal-header">
-        <button class="icon-btn" id="close-reading">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <!-- API Configuration Modal -->
+  <div class="modal" id="api-config-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>API Configuration</h2>
+        <button class="modal-close" id="close-api-config">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <span id="reading-title">Reading Mode</span>
       </div>
-      <div class="reading-content" id="reading-content">
-        <!-- Reading content injected here -->
-      </div>
-    </div>
-
-    <!-- Hidden file input for opening projects -->
-    <input type="file" id="file-input" accept=".json" style="display: none;">
-
-    <!-- Diff Preview Modal -->
-    <div class="modal" id="diff-preview-modal">
-      <div class="modal-backdrop"></div>
-      <div class="diff-modal-content">
-        <div class="diff-header">
-          <h3>Preview Changes</h3>
-          <button class="icon-btn close-modal">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div class="diff-body" id="diff-body">
-          <!-- Diff content rendered here -->
-        </div>
-        <div class="diff-actions">
-          <button class="btn btn-secondary" id="diff-cancel">Cancel</button>
-          <button class="btn btn-primary" id="diff-apply">Apply Changes</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Selection Toolbar (no longer used, kept for potential future features) -->
-    <div id="selection-toolbar" class="selection-toolbar">
-    </div>
-
-    <!-- Project Selector Modal -->
-    <div class="modal" id="projects-modal">
-      <div class="modal-backdrop" id="projects-backdrop"></div>
-      <div class="modal-content modal-content-wide">
-        <div class="modal-header">
-          <h2>Your Projects</h2>
-          <button class="icon-btn" id="close-projects">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="projects-list" id="projects-list">
-            <!-- Projects will be listed here -->
+      <div class="modal-body">
+        <div class="settings-section">
+          <p class="settings-description">Configure your AI provider connection. Works with any OpenAI-compatible API.
+          </p>
+          <div class="setting-row">
+            <label>Provider URL</label>
+            <input type="text" id="setting-ai-provider" placeholder="e.g., https://api.nano-gpt.com/v1" />
           </div>
-          <div class="projects-actions">
-            <button class="btn btn-secondary" id="import-project-btn">Import from File</button>
+          <div class="setting-row">
+            <label>API Key</label>
+            <div class="api-key-input">
+              <input type="password" id="setting-ai-apikey" placeholder="Enter your API key" />
+              <button type="button" class="btn-icon" id="toggle-apikey-visibility" title="Show/Hide">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <label>Model ID</label>
+            <input type="text" id="setting-ai-model" placeholder="e.g., glm-4.7, gpt-4o, claude-3-5-sonnet" />
+          </div>
+          <div class="setting-row setting-row-actions">
+            <button type="button" class="btn btn-secondary" id="test-ai-connection">Test Connection</button>
+            <span id="ai-connection-status"></span>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Thesaurus Modal -->
-    <div class="modal" id="thesaurus-modal">
-      <div class="modal-backdrop" id="thesaurus-backdrop"></div>
-      <div class="modal-content thesaurus-modal">
-        <div class="modal-header">
-          <h2>📖 Thesaurus</h2>
-          <button class="icon-btn" id="close-thesaurus">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+        <div class="settings-section">
+          <h3>Alive Editor Model (Optional)</h3>
+          <p class="settings-description">Faster model for real-time features. Leave blank to use main model.</p>
+          <div class="setting-row">
+            <label>Provider URL</label>
+            <input type="text" id="setting-alive-provider" placeholder="Same as above if blank" />
+          </div>
+          <div class="setting-row">
+            <label>API Key</label>
+            <input type="password" id="setting-alive-apikey" placeholder="Same as above if blank" />
+          </div>
+          <div class="setting-row">
+            <label>Model ID</label>
+            <input type="text" id="setting-alive-model" placeholder="e.g., gpt-4o-mini, gemini-flash" />
+          </div>
         </div>
-        <div class="modal-body">
-          <div class="thesaurus-search-row">
-            <input type="text" id="thesaurus-input" placeholder="Enter a word..." autocomplete="off" />
-            <button class="btn btn-primary" id="thesaurus-search-btn">Search</button>
+
+        <div class="settings-section">
+          <h3>Image Model (For Mood Art)</h3>
+          <p class="settings-description">For generating chapter mood art thumbnails.</p>
+          <div class="setting-row">
+            <label>Image API URL</label>
+            <input type="text" id="setting-image-provider" placeholder="e.g., https://api.nano-gpt.com/v1" />
           </div>
-          <div class="thesaurus-toggle">
-            <button class="toggle-btn active" id="toggle-synonyms">Synonyms</button>
-            <button class="toggle-btn" id="toggle-antonyms">Antonyms</button>
+          <div class="setting-row">
+            <label>API Key</label>
+            <input type="password" id="setting-image-apikey" placeholder="Image API key (or same as main)" />
           </div>
-          <div class="thesaurus-results" id="thesaurus-results">
-            <p class="thesaurus-hint">Enter a word and press Search to find synonyms or antonyms.</p>
+          <div class="setting-row">
+            <label>Model ID</label>
+            <input type="text" id="setting-image-model" placeholder="e.g., z-image-turbo" />
+          </div>
+          <div class="setting-row">
+            <label>Art Style</label>
+            <select id="setting-image-style">
+              <option value="">-- No style prefix --</option>
+              <option
+                value="Digital painting, fantasy book illustration, rich colors, dramatic lighting, magical atmosphere">
+                🧙 Fantasy</option>
+              <option value="Anime art style, vibrant colors, cel-shaded, expressive, Studio Ghibli inspired">🎌 Anime
+              </option>
+              <option
+                value="Photorealistic, cinematic lighting, detailed textures, 8K quality, professional photography">📷
+                Realistic</option>
+              <option value="Modern minimalist design, clean lines, muted color palette, contemporary aesthetic">🏙️
+                Modern</option>
+              <option
+                value="Dark gothic atmosphere, moody lighting, deep shadows, Victorian aesthetic, haunting beauty">🦇
+                Gothic</option>
+              <option value="Watercolor painting, soft edges, pastel colors, dreamy atmosphere, artistic brush strokes">
+                🎨
+                Watercolor</option>
+              <option value="Oil painting, classical art style, Renaissance inspired, rich textures, museum quality">
+                🖼️ Classical</option>
+              <option value="Sci-fi concept art, futuristic, neon lights, cyberpunk aesthetic, high tech">🚀 Sci-Fi
+              </option>
+              <option value="Noir style, black and white, high contrast, dramatic shadows, film noir aesthetic">🎬
+                Noir</option>
+              <option value="Whimsical illustration, storybook style, charming, colorful, children's book aesthetic">
+                📚 Storybook</option>
+            </select>
           </div>
         </div>
       </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="save-api-config">Save Configuration</button>
+      </div>
     </div>
+  </div>
+
+  <!-- Image Gallery Modal -->
+  <div class="modal" id="image-gallery-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2>🖼️ Image Gallery</h2>
+        <button class="modal-close" id="close-image-gallery">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="settings-description">All generated mood art images. Click to select for current chapter.</p>
+        <div class="gallery-grid" id="gallery-grid">
+          <!-- Images injected dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reading Mode Modal -->
+  <div class="reading-modal" id="reading-modal">
+    <div class="reading-modal-header">
+      <button class="icon-btn" id="close-reading">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+      <span id="reading-title">Reading Mode</span>
+    </div>
+    <div class="reading-content" id="reading-content">
+      <!-- Reading content injected here -->
+    </div>
+  </div>
+
+  <!-- Hidden file input for opening projects -->
+  <input type="file" id="file-input" accept=".json" style="display: none;">
+
+  <!-- Diff Preview Modal -->
+  <div class="modal" id="diff-preview-modal">
+    <div class="modal-backdrop"></div>
+    <div class="diff-modal-content">
+      <div class="diff-header">
+        <h3>Preview Changes</h3>
+        <button class="icon-btn close-modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="diff-body" id="diff-body">
+        <!-- Diff content rendered here -->
+      </div>
+      <div class="diff-actions">
+        <button class="btn btn-secondary" id="diff-cancel">Cancel</button>
+        <button class="btn btn-primary" id="diff-apply">Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selection Toolbar (no longer used, kept for potential future features) -->
+  <div id="selection-toolbar" class="selection-toolbar">
+  </div>
+
+  <!-- Project Selector Modal -->
+  <div class="modal" id="projects-modal">
+    <div class="modal-backdrop" id="projects-backdrop"></div>
+    <div class="modal-content modal-content-wide">
+      <div class="modal-header">
+        <h2>Your Projects</h2>
+        <button class="icon-btn" id="close-projects">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="projects-list" id="projects-list">
+          <!-- Projects will be listed here -->
+        </div>
+        <div class="projects-actions">
+          <button class="btn btn-secondary" id="import-project-btn">Import from File</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thesaurus Modal -->
+  <div class="modal" id="thesaurus-modal">
+    <div class="modal-backdrop" id="thesaurus-backdrop"></div>
+    <div class="modal-content thesaurus-modal">
+      <div class="modal-header">
+        <h2>📖 Thesaurus</h2>
+        <button class="icon-btn" id="close-thesaurus">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="thesaurus-search-row">
+          <input type="text" id="thesaurus-input" placeholder="Enter a word..." autocomplete="off" />
+          <button class="btn btn-primary" id="thesaurus-search-btn">Search</button>
+        </div>
+        <div class="thesaurus-toggle">
+          <button class="toggle-btn active" id="toggle-synonyms">Synonyms</button>
+          <button class="toggle-btn" id="toggle-antonyms">Antonyms</button>
+        </div>
+        <div class="thesaurus-results" id="thesaurus-results">
+          <p class="thesaurus-hint">Enter a word and press Search to find synonyms or antonyms.</p>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- Story Pulse Modal -->
