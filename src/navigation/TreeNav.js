@@ -243,8 +243,10 @@ export class TreeNav {
 
         const menuBtn = hasMenu ? `
       <button class="tree-section-menu-btn icon-btn icon-btn-sm" title="Options">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="1"></circle>
+          <circle cx="12" cy="5" r="1"></circle>
+          <circle cx="12" cy="19" r="1"></circle>
         </svg>
       </button>
     ` : '';
@@ -252,7 +254,7 @@ export class TreeNav {
         return `
       <div class="tree-section${isCollapsed ? ' collapsed' : ''}" data-section="${id}">
         <div class="tree-section-header">
-          <svg class="tree-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="tree-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 9l6 6 6-6"/>
           </svg>
           <span class="tree-section-title">${title}</span>
@@ -296,7 +298,7 @@ export class TreeNav {
                 html += `<div class="tree-children${chapterCollapsed ? ' collapsed' : ''}" data-parent="${chapter.id}">`;
 
                 chapter.scenes.forEach(scene => {
-                    html += this.renderItem({ section: 'manuscript', id: scene.id, type: 'scene', label: scene.title, icon: 'doc', depth: 3, parent: chapter.id, grandparent: part.id, draggable: true });
+                    html += this.renderItem({ section: 'manuscript', id: scene.id, type: 'scene', label: scene.title, icon: 'dot', depth: 3, parent: chapter.id, grandparent: part.id, draggable: true });
                 });
 
                 html += `</div>`;
@@ -335,7 +337,7 @@ export class TreeNav {
             const castId = `cast-${castName.replace(/\s+/g, '-').toLowerCase()}`;
             html += this.renderItem({ section: 'characters', id: castId, type: 'cast', label: castName, icon: 'users' });
             chars.forEach(c => {
-                html += this.renderItem({ section: 'characters', id: c.id, type: 'character', label: c.name, icon: 'user', depth: 1 });
+                html += this.renderItem({ section: 'characters', id: c.id, type: 'character', label: c.name, icon: 'dot', depth: 1 });
             });
         });
 
@@ -427,17 +429,28 @@ export class TreeNav {
 
     renderItem({ section, id, type, label, icon, depth = 0, parent = null, grandparent = null, draggable = false, collapsible = false, isCollapsed = false, moodArt = null }) {
         const icons = {
-            book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-            part: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M12 6v7"/><path d="M8 9h8"/>',
-            file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>',
-            doc: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13,2 13,9 20,9"/>',
-            grid: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
-            list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="2" fill="currentColor"/><circle cx="4" cy="12" r="2" fill="currentColor"/><circle cx="4" cy="18" r="2" fill="currentColor"/>',
-            users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-            user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-            summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
-            analysis: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/><path d="M14 14h.01"/>',
-            globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
+            // Book: Distinctive open book with filled pages
+            book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke-linecap="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="currentColor" fill-opacity="0.2" stroke-linejoin="round"/>',
+
+            // Part: Premium Folder with gradient-like fill opacity
+            part: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="currentColor" fill-opacity="0.2" stroke-linejoin="round"/>',
+
+            // Chapter: Rich document type
+            chapter: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="currentColor" fill-opacity="0.1" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke-linecap="round" stroke-linejoin="round"/>',
+
+            // Scene: Stylized content block
+            scene: '<rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/><path d="M7 8h10M7 12h10M7 16h6" stroke-linecap="round" stroke-width="1.5" opacity="0.7"/>',
+
+            // Other icons (updated)
+            file: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" fill="currentColor" fill-opacity="0.1"/><polyline points="13 2 13 9 20 9"/>',
+            grid: '<rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" fill-opacity="0.1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.5"/>',
+            summary: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="currentColor" fill-opacity="0.1"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>',
+            analysis: '<rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" fill-opacity="0.1"/><path d="M3 9h18M9 21V9M14 14h.01"/>',
+            globe: '<circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.1"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+            users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="currentColor" fill-opacity="0.2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+
+            // Simple dot/bullet for minimal items
+            dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>'
         };
 
         const paddingLeft = 12 + (depth * 16);
