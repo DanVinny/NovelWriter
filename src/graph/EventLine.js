@@ -156,6 +156,14 @@ export class EventLine {
 
         // Always show delete/edit controls as requested by user for both modes
         this.renderEventTimeline(events, true);
+
+        // Phase 16: Render Comparative Analysis (if present)
+        const comparativeHtml = this.renderComparativeSection(this.app.state.eventLine);
+        if (comparativeHtml) {
+            const comparativeDiv = document.createElement('div');
+            comparativeDiv.innerHTML = comparativeHtml;
+            this.container.appendChild(comparativeDiv);
+        }
     }
 
     renderCustomMode() {
@@ -588,8 +596,12 @@ export class EventLine {
                 return;
             }
 
+            // ========== PHASE 16: CHECK FOR PREVIOUS ANALYSIS ==========
+            const previousAnalysis = this.app.state.eventLine;
+            const isRegenerate = previousAnalysis && previousAnalysis._snapshot;
+
             // Build prompt
-            const prompt = this.buildPrompt(context);
+            const prompt = this.buildPrompt(context, isRegenerate, previousAnalysis);
 
             // Call AI
             let response = '';
@@ -606,10 +618,35 @@ export class EventLine {
             // Parse response
             const events = this.parseResponse(response);
 
-            // Save to state
+            // ========== PHASE 16: BUILD COMPARATIVE LOG ==========
+            let comparativeLog = [];
+            if (isRegenerate && previousAnalysis?.comparativeLog) {
+                comparativeLog = [...previousAnalysis.comparativeLog];
+            }
+
+            // Extract comparative analysis if present
+            const comparativeAnalysis = this.extractComparativeAnalysis(response);
+            if (isRegenerate && comparativeAnalysis) {
+                comparativeLog.push({
+                    timestamp: new Date().toISOString(),
+                    reasoning: comparativeAnalysis.overallVerdict || 'No verdict provided',
+                    eventsAdded: comparativeAnalysis.eventsAdded || [],
+                    eventsModified: comparativeAnalysis.eventsModified || [],
+                    eventsRemoved: comparativeAnalysis.eventsRemoved || []
+                });
+            }
+
+            // Save to state with snapshot for future comparisons
             this.app.state.eventLine = {
                 events,
-                generatedAt: new Date().toISOString()
+                generatedAt: new Date().toISOString(),
+                // Phase 16: Store manuscript snapshot and comparative log
+                _snapshot: {
+                    manuscriptText: context,
+                    timestamp: new Date().toISOString()
+                },
+                comparativeLog: comparativeLog,
+                comparativeAnalysis: comparativeAnalysis
             };
             this.app.save();
 
@@ -705,11 +742,94 @@ RULES:
 
 MANUSCRIPT:
 ${context.substring(0, 50000)}`;
+
+        // ========== PHASE 16: COMPARATIVE PROMPT (REGENERATE ONLY) ==========
+        if (isRegenerate && previousAnalysis) {
+            const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
+            const prevEvents = previousAnalysis.events || [];
+            const comparativeLog = previousAnalysis.comparativeLog || [];
+            const prevTimestamp = previousAnalysis.generatedAt || 'unknown';
+
+            basePrompt += `
+
+==========================================================================
+## CRITICAL: THIS IS A REGENERATION - COMPARATIVE ANALYSIS REQUIRED
+==========================================================================
+
+**STOP. READ THIS CAREFULLY.**
+
+You have generated an event line for this manuscript BEFORE. The writer has made changes and wants you to:
+- PRESERVE existing events that still apply
+- EXPAND the timeline with new events from new content
+- MODIFY events if the underlying scenes changed
+- REMOVE events if the scenes were deleted
+
+If you regenerate blindly, you DESTROY consistency. 
+
+### YOUR PREVIOUS EVENT LINE
+(Generated at: ${prevTimestamp})
+
+\`\`\`json
+${JSON.stringify(prevEvents, null, 2)}
+\`\`\`
+
+### MANUSCRIPT AT PREVIOUS GENERATION TIME
+
+${prevSnapshot.substring(0, 40000)}
+
+${comparativeLog.length > 0 ? `
+### COMPARATIVE LOG (Previous Update Reasonings)
+${comparativeLog.map((entry, i) => `
+--- Update ${i + 1} (${entry.timestamp}) ---
+${entry.reasoning}
+`).join('\n')}
+` : ''}
+
+==========================================================================
+## YOUR TASK
+==========================================================================
+
+1. **COMPARE** both manuscript versions
+2. **PRESERVE** events from the previous list that still apply
+3. **MODIFY** events if scenes changed (update description/type)
+4. **ADD NEW** events for new manuscript content
+5. **REMOVE** events if scenes were deleted
+
+## OUTPUT FORMAT
+
+Return a JSON object with TWO parts:
+{
+  "events": [...the updated event array...],
+  "comparativeAnalysis": {
+    "eventsAdded": [{"title": "New event", "reason": "Added in new Chapter X content"}],
+    "eventsModified": [{"title": "Modified event", "reason": "Scene was rewritten"}],
+    "eventsRemoved": [{"title": "Removed event", "reason": "Scene was deleted"}],
+    "overallVerdict": "Expanded timeline with X new events, modified Y, removed Z."
+  }
+}
+
+BE METICULOUS. The writer trusts you to maintain timeline consistency.`;
+        }
+
+        return basePrompt;
     }
 
     parseResponse(response) {
         try {
-            // Find JSON array in response
+            // First try to find a JSON object (Phase 16 format)
+            const objMatch = response.match(/\{[\s\S]*\}/);
+            if (objMatch) {
+                try {
+                    const data = JSON.parse(objMatch[0]);
+                    if (Array.isArray(data.events)) {
+                        return this.sanitizeEvents(data.events);
+                    }
+                } catch (e) {
+                    // Ignore and try array match
+                }
+            }
+
+            // Fallback: Find JSON array in response (Legacy format)
             const jsonMatch = response.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
                 console.error('No JSON array found in response');
@@ -717,18 +837,101 @@ ${context.substring(0, 50000)}`;
             }
 
             const events = JSON.parse(jsonMatch[0]);
-
-            // Validate structure and include type
-            const validTypes = ['action', 'conflict', 'chase', 'reveal', 'mystery', 'decision', 'betrayal', 'death', 'victory', 'defeat', 'emotional', 'calm', 'setup'];
-            return events.filter(e => e.title && typeof e.title === 'string').map((e, i) => ({
-                title: e.title.substring(0, 50),
-                description: (e.description || '').substring(0, 200),
-                type: validTypes.includes(e.type) ? e.type : 'setup',
-                gap: i === 0 ? null : (e.gap || 'soon')
-            }));
+            return this.sanitizeEvents(events);
         } catch (error) {
             console.error('Failed to parse event line response:', error);
             return [];
         }
+    }
+
+    sanitizeEvents(events) {
+        const validTypes = ['action', 'conflict', 'chase', 'reveal', 'mystery', 'decision', 'betrayal', 'death', 'victory', 'defeat', 'emotional', 'calm', 'setup'];
+        return events.filter(e => e.title && typeof e.title === 'string').map((e, i) => ({
+            title: e.title.substring(0, 50),
+            description: (e.description || '').substring(0, 200),
+            type: validTypes.includes(e.type) ? e.type : 'setup',
+            gap: i === 0 ? null : (e.gap || 'soon')
+        }));
+    }
+
+    // Phase 16: Extract comparative analysis from response
+    extractComparativeAnalysis(response) {
+        try {
+            const jsonMatch = response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const data = JSON.parse(jsonMatch[0]);
+                return data.comparativeAnalysis || null;
+            }
+        } catch (e) {
+            return null;
+        }
+        return null;
+    }
+
+    // Phase 16: Render comparative analysis UI
+    renderComparativeSection(data) {
+        const log = data.comparativeLog || [];
+        const current = data.comparativeAnalysis;
+
+        if (!current && log.length === 0) return '';
+
+        let html = `
+            <div class="event-line-comparative comparative-analysis">
+                <div class="analysis-category-header">
+                    <span class="analysis-category-icon">📈</span>
+                    <span class="analysis-category-title">Comparative Analysis</span>
+                </div>
+                <div class="analysis-category-body">
+        `;
+
+        if (current) {
+            html += `<div class="comparative-current">`;
+
+            if (current.eventsAdded?.length) {
+                html += `<div class="comparative-item resolved">
+                    <strong>✨ Added Events:</strong>
+                    <ul>${current.eventsAdded.map(e => `<li><b>${e.title}</b>: ${e.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.eventsModified?.length) {
+                html += `<div class="comparative-item">
+                    <strong>✏️ Modified Events:</strong>
+                    <ul>${current.eventsModified.map(e => `<li><b>${e.title}</b>: ${e.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.eventsRemoved?.length) {
+                html += `<div class="comparative-item regressions">
+                    <strong>🗑️ Removed Events:</strong>
+                    <ul>${current.eventsRemoved.map(e => `<li><b>${e.title}</b>: ${e.reason}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.overallVerdict) {
+                html += `<div class="comparative-verdict"><strong>🎯 Verdict:</strong> ${current.overallVerdict}</div>`;
+            }
+
+            html += `</div>`;
+        }
+
+        if (log.length > 0) {
+            html += `
+                <details class="comparative-log">
+                    <summary>📜 Previous Updates (${log.length})</summary>
+                    <div class="log-entries">
+                        ${log.slice().reverse().map(entry => `
+                            <div class="log-entry">
+                                <div class="log-date">${new Date(entry.timestamp).toLocaleString()}</div>
+                                <div class="log-verdict">${entry.reasoning}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
+        html += `</div></div>`;
+        return html;
     }
 }

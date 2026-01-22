@@ -31,6 +31,8 @@ export class AliveEditor {
 
         // UI Elements (will be null if not yet in DOM)
         this.panel = document.getElementById('alive-panel');
+        this.body = document.getElementById('alive-body');
+        this.collapseBtn = document.getElementById('alive-collapse-btn');
         this.moodIndicator = document.getElementById('mood-indicator');
         this.popup = document.getElementById('alive-popup');
         this.popupTimeout = null;
@@ -40,21 +42,45 @@ export class AliveEditor {
         if (alive.moodEnabled !== undefined) this.features.mood.enabled = alive.moodEnabled;
         if (alive.moodTrigger) this.features.mood.trigger = alive.moodTrigger;
 
+        // Load collapsed state
+        if (alive.panelCollapsed && this.panel) {
+            this.panel.classList.add('collapsed');
+        }
+
         this.bindEvents();
         this.updatePanel();
     }
 
     bindEvents() {
         const editor = document.getElementById('editor-content');
-        if (!editor) return;
+        if (editor) {
+            editor.addEventListener('input', (e) => {
+                // Only count insertions
+                if (e.inputType?.startsWith('insert')) {
+                    const len = e.data?.length || 1;
+                    this.incrementCounters(len);
+                }
+            });
+        }
 
-        editor.addEventListener('input', (e) => {
-            // Only count insertions
-            if (e.inputType?.startsWith('insert')) {
-                const len = e.data?.length || 1;
-                this.incrementCounters(len);
-            }
-        });
+        // Collapse toggle - bind to header for larger click area
+        const header = this.panel?.querySelector('.alive-header');
+        if (header) {
+            header.addEventListener('click', () => this.toggleCollapse());
+        }
+    }
+
+    toggleCollapse() {
+        if (!this.panel) return;
+
+        this.panel.classList.toggle('collapsed');
+        const isCollapsed = this.panel.classList.contains('collapsed');
+
+        // Persist state
+        if (!this.app.state.settings) this.app.state.settings = {};
+        if (!this.app.state.settings.alive) this.app.state.settings.alive = {};
+        this.app.state.settings.alive.panelCollapsed = isCollapsed;
+        this.app.save();
     }
 
     incrementCounters(amount) {
@@ -209,7 +235,9 @@ Respond with ONLY the mood word.`;
             </div>`;
         }
 
-        this.panel.innerHTML = html;
+        if (this.body) {
+            this.body.innerHTML = html;
+        }
     }
 
     updateMoodIndicator() {

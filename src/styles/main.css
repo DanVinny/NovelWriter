@@ -1762,6 +1762,9 @@ body.focus-mode #btn-focus-mode {
 }
 
 .alive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: var(--bg-tertiary);
   padding: 0.4rem 0.75rem;
   font-size: 0.75rem;
@@ -1770,6 +1773,42 @@ body.focus-mode #btn-focus-mode {
   border-bottom: 1px solid var(--border-color);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.alive-collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.alive-collapse-btn:hover {
+  color: var(--text-primary);
+}
+
+.alive-panel.collapsed .alive-collapse-btn {
+  transform: rotate(180deg);
+}
+
+.alive-body {
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.alive-panel.collapsed .alive-body {
+  max-height: 0;
+  opacity: 0;
+}
+
+.alive-panel.collapsed .alive-header {
+  border-bottom: none;
 }
 
 .alive-feature {
@@ -7226,4 +7265,150 @@ body.focus-mode #btn-focus-mode {
 #webs-menu {
   left: 0;
   right: auto;
+}
+
+/* ========== PHASE 16: COMPARATIVE ANALYSIS STYLES ========== */
+.comparative-analysis {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.comparative-current h4 {
+  margin: 0 0 var(--space-md);
+  color: var(--accent-primary);
+  font-size: 14px;
+}
+
+.comparative-section,
+.comparative-item {
+  margin-bottom: var(--space-md);
+}
+
+.comparative-section strong,
+.comparative-item strong {
+  display: block;
+  margin-bottom: var(--space-xs);
+  color: var(--text-secondary);
+}
+
+.comparative-section ul,
+.comparative-item ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+
+.comparative-section li,
+.comparative-item li {
+  margin-bottom: var(--space-xs);
+  color: var(--text-primary);
+}
+
+.comparative-section.resolved,
+.comparative-item.resolved {
+  background: rgba(34, 197, 94, 0.1);
+  padding: var(--space-sm);
+  border-radius: 6px;
+  border-left: 3px solid #22c55e;
+}
+
+.comparative-section.new-issues,
+.comparative-item.new-issues {
+  background: rgba(251, 191, 36, 0.1);
+  padding: var(--space-sm);
+  border-radius: 6px;
+  border-left: 3px solid #fbbf24;
+}
+
+.comparative-section.regressions,
+.comparative-item.regressions {
+  background: rgba(239, 68, 68, 0.1);
+  padding: var(--space-sm);
+  border-radius: 6px;
+  border-left: 3px solid #ef4444;
+}
+
+.rating-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.rating-delta {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rating-delta.improved {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.rating-delta.regressed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.rating-delta.unchanged {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.comparative-verdict {
+  margin-top: var(--space-md);
+  padding: var(--space-sm);
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.comparative-log {
+  margin-top: var(--space-md);
+}
+
+.comparative-log summary {
+  cursor: pointer;
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+.comparative-log summary:hover {
+  color: var(--text-primary);
+}
+
+.log-entries {
+  padding: var(--space-sm);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border-left: 2px solid var(--border-color);
+}
+
+.log-header {
+  margin-bottom: var(--space-xs);
+}
+
+.log-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.log-verdict {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.log-changes {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--space-xs);
 }

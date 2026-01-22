@@ -180,6 +180,9 @@ export class PlotTracker {
             showAddButtons
         );
 
+        // Phase 16: Comparative Analysis Section
+        html += this.renderComparativeSection(data);
+
         html += '</div>';
         this.container.innerHTML = html;
 
@@ -319,6 +322,89 @@ export class PlotTracker {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // ========== PHASE 16: RENDER COMPARATIVE ANALYSIS ==========
+    renderComparativeSection(data) {
+        const log = data.comparativeLog || [];
+        const current = data.comparativeAnalysis;
+
+        if (!current && log.length === 0) {
+            return ''; // No comparative data yet
+        }
+
+        let html = `
+            <div class="plot-section comparative-analysis">
+                <div class="plot-section-header">
+                    <span class="plot-section-icon">📈</span>
+                    <span class="plot-section-title">Comparative Analysis</span>
+                </div>
+                <div class="plot-section-content">
+        `;
+
+        if (current) {
+            html += `<div class="comparative-current">`;
+
+            if (current.movedToConcluded?.length) {
+                html += `<div class="comparative-item resolved">
+                    <strong>✅ Moved to Concluded:</strong>
+                    <ul>${current.movedToConcluded.map(p => `<li><b>${this.escapeHtml(p.title)}</b>: ${this.escapeHtml(p.reason)}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.resolvedHoles?.length) {
+                html += `<div class="comparative-item resolved">
+                    <strong>🔧 Resolved Plot Holes:</strong>
+                    <ul>${current.resolvedHoles.map(h => `<li><b>${this.escapeHtml(h.issue)}</b>: ${this.escapeHtml(h.reason)}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.severityChanges?.length) {
+                html += `<div class="comparative-item">
+                    <strong>📊 Severity Changes:</strong>
+                    <ul>${current.severityChanges.map(s => `<li>${this.escapeHtml(s.issue)}: ${s.previous}→${s.current}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.newOpenPlots?.length) {
+                html += `<div class="comparative-item new-issues">
+                    <strong>🆕 New Open Plots:</strong>
+                    <ul>${current.newOpenPlots.map(p => `<li>${this.escapeHtml(p.title)}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.newPlotHoles?.length) {
+                html += `<div class="comparative-item new-issues">
+                    <strong>⚠️ New Plot Holes:</strong>
+                    <ul>${current.newPlotHoles.map(h => `<li>${this.escapeHtml(h.issue)}</li>`).join('')}</ul>
+                </div>`;
+            }
+
+            if (current.overallVerdict) {
+                html += `<div class="comparative-verdict"><strong>🎯 Verdict:</strong> ${this.escapeHtml(current.overallVerdict)}</div>`;
+            }
+
+            html += `</div>`;
+        }
+
+        if (log.length > 0) {
+            html += `
+                <details class="comparative-log">
+                    <summary>📜 Previous Updates (${log.length})</summary>
+                    <div class="log-entries">
+                        ${log.slice().reverse().map(entry => `
+                            <div class="log-entry">
+                                <div class="log-date">${new Date(entry.timestamp).toLocaleString()}</div>
+                                <div class="log-verdict">${this.escapeHtml(entry.reasoning)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
+        html += `</div></div>`;
+        return html;
     }
 
     // ===== CUSTOM MODE: ADD/EDIT CARD =====
@@ -536,7 +622,11 @@ export class PlotTracker {
                 return;
             }
 
-            const prompt = this.buildPrompt(context);
+            // ========== PHASE 16: CHECK FOR PREVIOUS ANALYSIS ==========
+            const previousAnalysis = this.app.state.plotTracker;
+            const isRegenerate = previousAnalysis && previousAnalysis._snapshot;
+
+            const prompt = this.buildPrompt(context, isRegenerate, previousAnalysis);
 
             let response = '';
             await this.app.aiService.sendMessageStream(
@@ -551,10 +641,35 @@ export class PlotTracker {
 
             const analysis = this.parseResponse(response);
 
-            // Save to state
+            // ========== PHASE 16: BUILD COMPARATIVE LOG ==========
+            let comparativeLog = [];
+            if (isRegenerate && previousAnalysis?.comparativeLog) {
+                comparativeLog = [...previousAnalysis.comparativeLog];
+            }
+
+            // If this was a rescan and AI provided comparative analysis, add to log
+            if (isRegenerate && analysis.comparativeAnalysis) {
+                comparativeLog.push({
+                    timestamp: new Date().toISOString(),
+                    reasoning: analysis.comparativeAnalysis.overallVerdict || 'No verdict provided',
+                    movedToConcluded: analysis.comparativeAnalysis.movedToConcluded || [],
+                    resolvedHoles: analysis.comparativeAnalysis.resolvedHoles || [],
+                    newOpenPlots: analysis.comparativeAnalysis.newOpenPlots || [],
+                    newPlotHoles: analysis.comparativeAnalysis.newPlotHoles || [],
+                    severityChanges: analysis.comparativeAnalysis.severityChanges || []
+                });
+            }
+
+            // Save to state with snapshot for future comparisons
             this.app.state.plotTracker = {
                 ...analysis,
-                scannedAt: new Date().toISOString()
+                scannedAt: new Date().toISOString(),
+                // Phase 16: Store manuscript snapshot and comparative log
+                _snapshot: {
+                    manuscriptText: context,
+                    timestamp: new Date().toISOString()
+                },
+                comparativeLog: comparativeLog
             };
             this.app.save();
 
@@ -610,8 +725,8 @@ export class PlotTracker {
         return context;
     }
 
-    buildPrompt(context) {
-        return `You are a professional story editor. Perform a DEEP and THOROUGH analysis of this manuscript.
+    buildPrompt(context, isRegenerate = false, previousAnalysis = null) {
+        let basePrompt = `You are a professional story editor. Perform a DEEP and THOROUGH analysis of this manuscript.
 
 Read the ENTIRE manuscript carefully and identify:
 
@@ -664,6 +779,102 @@ Output ONLY valid JSON.
 
 MANUSCRIPT:
 ${context.substring(0, 80000)}`;
+
+        // ========== PHASE 16: COMPARATIVE PROMPT (RESCAN ONLY) ==========
+        if (isRegenerate && previousAnalysis) {
+            const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
+            const prevResults = {
+                openPlots: previousAnalysis.openPlots || [],
+                concludedPlots: previousAnalysis.concludedPlots || [],
+                plotHoles: previousAnalysis.plotHoles || []
+            };
+            const comparativeLog = previousAnalysis.comparativeLog || [];
+            const prevTimestamp = previousAnalysis.scannedAt || 'unknown';
+
+            basePrompt += `
+
+==========================================================================
+## CRITICAL: THIS IS A RESCAN - COMPARATIVE ANALYSIS REQUIRED
+==========================================================================
+
+**STOP. READ THIS CAREFULLY.**
+
+You have analyzed this manuscript BEFORE. The writer has made changes since your last scan and wants to understand:
+- Which OPEN PLOTS are now CONCLUDED? (Move them to concludedPlots)
+- Which PLOT HOLES are now FIXED? (Remove them or lower severity)
+- What NEW plot threads appeared?
+- What NEW plot holes emerged?
+
+If you ignore the previous analysis and regenerate blindly, you DESTROY the writer's ability to track their progress.
+
+### YOUR PREVIOUS ANALYSIS
+(Conducted at: ${prevTimestamp})
+
+\`\`\`json
+${JSON.stringify(prevResults, null, 2)}
+\`\`\`
+
+### MANUSCRIPT AT PREVIOUS SCAN TIME
+
+${prevSnapshot.substring(0, 60000)}
+
+${comparativeLog.length > 0 ? `
+### COMPARATIVE LOG (Previous Update Reasonings)
+${comparativeLog.map((entry, i) => `
+--- Update ${i + 1} (${entry.timestamp}) ---
+${entry.reasoning}
+`).join('\n')}
+` : ''}
+
+==========================================================================
+## YOUR TASK: METICULOUS COMPARISON
+==========================================================================
+
+1. **COMPARE** both manuscript versions (previous vs current)
+2. **FOR EACH PREVIOUS OPEN PLOT** determine:
+   - STILL OPEN: Keep in openPlots as-is
+   - NOW CONCLUDED: Move to concludedPlots with resolution details
+   - SCRAPPED: If the setup was removed, do not include
+3. **FOR EACH PREVIOUS PLOT HOLE** determine:
+   - STILL EXISTS: Keep with same or adjusted severity
+   - FIXED: Do not include in new list
+   - WORSE: Increase severity
+4. **IDENTIFY NEW** items that weren't in previous analysis
+5. **PRESERVE** your reasoning
+
+## OUTPUT REQUIREMENTS
+
+Your JSON response MUST include an additional "comparativeAnalysis" section:
+
+{
+  "openPlots": [...],
+  "concludedPlots": [...],
+  "plotHoles": [...],
+  
+  "comparativeAnalysis": {
+    "movedToConcluded": [
+      {"title": "Plot that was open, now concluded", "reason": "Writer added resolution in Chapter X"}
+    ],
+    "resolvedHoles": [
+      {"issue": "Previous plot hole title", "reason": "Fixed by adding explanation in Chapter Y"}
+    ],
+    "severityChanges": [
+      {"issue": "Plot hole title", "previous": 7, "current": 4, "reason": "Partially addressed"}
+    ],
+    "newOpenPlots": [
+      {"title": "New plot thread", "reason": "Introduced in new content"}
+    ],
+    "newPlotHoles": [
+      {"issue": "New issue", "reason": "Created by recent changes"}
+    ],
+    "overallVerdict": "The writer has resolved X open plots and fixed Y plot holes. Z new issues emerged. Net progress: POSITIVE/NEGATIVE/NEUTRAL"
+  }
+}
+
+BE THOROUGH. BE SPECIFIC. The writer trusts you to track their progress.`;
+        }
+
+        return basePrompt;
     }
 
     parseResponse(response) {
@@ -694,7 +905,9 @@ ${context.substring(0, 80000)}`;
                     issue: String(h.issue || 'Unknown issue').substring(0, 150),
                     location: String(h.location || '').substring(0, 100),
                     explanation: String(h.explanation || '').substring(0, 1000)
-                })).sort((a, b) => b.severity - a.severity) // Sort by severity desc
+                })).sort((a, b) => b.severity - a.severity), // Sort by severity desc
+                // Phase 16: Include comparative analysis if present
+                comparativeAnalysis: data.comparativeAnalysis || null
             };
         } catch (error) {
             console.error('Failed to parse plot tracker response:', error);

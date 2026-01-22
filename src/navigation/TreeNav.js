@@ -536,6 +536,7 @@ export class TreeNav {
                     { divider: true },
                     { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
                     { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
+                    ...(hasAnalysis ? [{ label: '🗑️ Delete Analysis', onClick: () => this.deletePartAnalysis(id) }] : []),
                     { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
                     ...(hasWorldInfo ? [{ label: '🗑️ Delete World Info', onClick: () => this.deleteWorldInfo(id) }] : []),
                     { divider: true },
@@ -1974,12 +1975,18 @@ Return the full text with suggestions:`;
 
         const partTitle = part.displayTitle || part.title;
 
+        // ========== PHASE 16: CHECK FOR PREVIOUS ANALYSIS ==========
+        const previousAnalysis = this.app.state.analysis?.parts?.[partId];
+        const isRegenerate = previousAnalysis && !previousAnalysis.isLoading && previousAnalysis._snapshot;
+
         // Initialize loading state
         if (!this.app.state.analysis) this.app.state.analysis = { parts: {} };
         this.app.state.analysis.parts[partId] = {
             isLoading: true,
             partTitle: partTitle,
-            generatedAt: new Date().toISOString()
+            generatedAt: new Date().toISOString(),
+            // Preserve previous data during loading (for comparative context)
+            _previous: isRegenerate ? previousAnalysis : null
         };
         this.app.save();
 
@@ -2059,7 +2066,7 @@ You must return your analysis in the following JSON structure:
 
 When referencing scenes, ALWAYS use the format: "In [Chapter Title] > [Scene Title]..." so the writer can easily navigate there.`;
 
-        const userPrompt = `Please analyze this part of my novel manuscript: "${partTitle}"
+        let userPrompt = `Please analyze this part of my novel manuscript: "${partTitle}"
 
 Here is the FULL MANUSCRIPT for context (so you understand the overall story):
 ${manuscriptContent}
@@ -2077,6 +2084,106 @@ Please provide a comprehensive analysis covering:
 5. Writing Style Report - Passive voice, adverbs, sentence variety, readability?
 
 Return your analysis as a JSON object following the exact structure specified.`;
+
+        // ========== PHASE 16: COMPARATIVE PROMPT (REGENERATE ONLY) ==========
+        if (isRegenerate && previousAnalysis) {
+            const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
+            const prevResults = {
+                characterVoice: previousAnalysis.characterVoice,
+                pacing: previousAnalysis.pacing,
+                consistency: previousAnalysis.consistency,
+                showVsTell: previousAnalysis.showVsTell,
+                writingStyle: previousAnalysis.writingStyle,
+                overall: previousAnalysis.overall
+            };
+            const comparativeLog = previousAnalysis.comparativeLog || [];
+            const prevTimestamp = previousAnalysis.generatedAt || 'unknown';
+
+            userPrompt += `
+
+==========================================================================
+## CRITICAL: THIS IS A REGENERATION - COMPARATIVE ANALYSIS REQUIRED
+==========================================================================
+
+**STOP. READ THIS CAREFULLY.**
+
+You have analyzed this manuscript BEFORE. The writer has made changes since your last analysis and wants to understand:
+- Did their changes IMPROVE the story?
+- Which issues from last time are now FIXED?
+- What NEW problems appeared?
+- What got WORSE (regressions)?
+
+If you ignore the previous analysis and just generate a fresh one, you DESTROY the writer's ability to track their progress. This defeats the ENTIRE PURPOSE of this tool.
+
+### YOUR PREVIOUS ANALYSIS
+(Conducted at: ${prevTimestamp})
+
+\`\`\`json
+${JSON.stringify(prevResults, null, 2)}
+\`\`\`
+
+### MANUSCRIPT AT PREVIOUS ANALYSIS TIME
+
+${prevSnapshot.substring(0, 60000)}
+
+${comparativeLog.length > 0 ? `
+### COMPARATIVE LOG (Previous Update Reasonings)
+${comparativeLog.map((entry, i) => `
+--- Update ${i + 1} (${entry.timestamp}) ---
+${entry.reasoning}
+`).join('\n')}
+` : ''}
+
+==========================================================================
+## YOUR TASK: METICULOUS COMPARISON
+==========================================================================
+
+1. **CAREFULLY READ** both manuscript versions (previous vs current)
+2. **IDENTIFY ALL CHANGES** - additions, deletions, modifications (even subtle ones)
+3. **COMPARE** each element of your previous analysis against both manuscripts
+4. **DETERMINE** for each previous finding:
+   - UNCHANGED: Still applies exactly as before
+   - IMPROVED: Issue partially or fully addressed
+   - REGRESSED: Got worse
+   - RESOLVED: Completely fixed
+   - REMOVED: No longer relevant (content deleted)
+5. **IDENTIFY NEW** findings that weren't in previous analysis
+6. **UPDATE SCORES** based on actual changes, not random variation
+
+## OUTPUT REQUIREMENTS
+
+Your JSON response MUST include an additional "comparativeAnalysis" section:
+
+{
+  ...all the standard analysis sections...,
+  
+  "comparativeAnalysis": {
+    "changesDetected": [
+      "Chapter X > Scene Y: Added 200 words of dialogue",
+      "Chapter Z > Scene W: Rewrote the fight scene",
+      ...
+    ],
+    "ratingDeltas": {
+      "characterVoice": { "previous": 5, "current": 6, "reason": "New dialogue in Chapter X shows stronger voice distinction" },
+      "pacing": { "previous": 4, "current": 4, "reason": "No significant pacing changes detected" },
+      ...
+    },
+    "resolvedIssues": [
+      "Previously noted: 'Stilted dialogue in Chapter 2' - NOW RESOLVED: Dialogue rewritten with more natural flow"
+    ],
+    "newIssues": [
+      "New scene in Chapter 3 introduces pacing problems"
+    ],
+    "regressions": [
+      "Chapter 4's action scene, previously rated well, now feels rushed after cuts"
+    ],
+    "overallVerdict": "The writer has made meaningful improvements in X and Y. However, Z needs attention. Net progress: POSITIVE/NEGATIVE/NEUTRAL"
+  }
+}
+
+BE THOROUGH. BE SPECIFIC. CITE EXACT LOCATIONS.
+The writer trusts you to be their honest progress tracker.`
+        }
 
         try {
             const messages = [
@@ -2096,13 +2203,39 @@ Return your analysis as a JSON object following the exact structure specified.`;
             // Parse the JSON response
             const analysis = this.parseAnalysisResponse(fullResponse, partId, partTitle, sceneMap);
 
-            // Store the analysis
+            // ========== PHASE 16: BUILD COMPARATIVE LOG ==========
+            let comparativeLog = [];
+            if (isRegenerate && previousAnalysis?.comparativeLog) {
+                // Carry forward previous log entries
+                comparativeLog = [...previousAnalysis.comparativeLog];
+            }
+
+            // If this was a regenerate and AI provided comparative analysis, add to log
+            if (isRegenerate && analysis.comparativeAnalysis) {
+                comparativeLog.push({
+                    timestamp: new Date().toISOString(),
+                    reasoning: analysis.comparativeAnalysis.overallVerdict || 'No verdict provided',
+                    changesDetected: analysis.comparativeAnalysis.changesDetected || [],
+                    ratingDeltas: analysis.comparativeAnalysis.ratingDeltas || {},
+                    resolvedIssues: analysis.comparativeAnalysis.resolvedIssues || [],
+                    newIssues: analysis.comparativeAnalysis.newIssues || [],
+                    regressions: analysis.comparativeAnalysis.regressions || []
+                });
+            }
+
+            // Store the analysis with snapshot for future comparisons
             if (!this.app.state.analysis) this.app.state.analysis = { parts: {} };
             this.app.state.analysis.parts[partId] = {
                 generatedAt: new Date().toISOString(),
                 partTitle: partTitle,
                 sceneMap: sceneMap,
-                ...analysis
+                ...analysis,
+                // Phase 16: Store manuscript snapshot and comparative log
+                _snapshot: {
+                    manuscriptText: partContent,
+                    timestamp: new Date().toISOString()
+                },
+                comparativeLog: comparativeLog
             };
 
             this.app.save();
@@ -2122,6 +2255,22 @@ Return your analysis as a JSON object following the exact structure specified.`;
                 delete this.app.state.analysis.parts[partId];
                 this.app.save();
                 this.render();
+            }
+        }
+    }
+
+    deletePartAnalysis(partId) {
+        if (!confirm('Delete this analysis? This cannot be undone.')) return;
+
+        if (this.app.state.analysis?.parts?.[partId]) {
+            delete this.app.state.analysis.parts[partId];
+            this.app.save();
+            this.render();
+
+            // If currently viewing this analysis, clear editor
+            if (this.app.currentContext?.type === 'analysis' && this.app.currentContext?.partId === partId) {
+                const editor = document.getElementById('editor-content');
+                if (editor) editor.innerHTML = '<div class="empty-state">Analysis deleted</div>';
             }
         }
     }
@@ -2265,6 +2414,7 @@ Return your analysis as a JSON object following the exact structure specified.`;
                     ${renderCategory('Show vs Tell Analysis', '👁️', analysis.showVsTell || {})}
                     ${writingStyleHtml}
                     ${overallHtml}
+                    ${this.renderComparativeAnalysis(analysis)}
                 </div>
             </div>
         `;
@@ -2280,6 +2430,109 @@ Return your analysis as a JSON object following the exact structure specified.`;
                 }
             });
         });
+    }
+
+    // ========== PHASE 16: RENDER COMPARATIVE ANALYSIS ==========
+    renderComparativeAnalysis(analysis) {
+        const log = analysis.comparativeLog || [];
+        const current = analysis.comparativeAnalysis;
+
+        if (!current && log.length === 0) {
+            return ''; // No comparative data yet
+        }
+
+        let html = `
+            <div class="analysis-category comparative-analysis">
+                <div class="analysis-category-header">
+                    <span class="analysis-category-icon">📈</span>
+                    <span class="analysis-category-title">Comparative Analysis</span>
+                </div>
+                <div class="analysis-category-body">
+        `;
+
+        // Current comparison (most recent)
+        if (current) {
+            html += `
+                <div class="comparative-current">
+                    <h4>🔄 Latest Update</h4>
+                    
+                    ${current.changesDetected?.length ? `
+                        <div class="comparative-section">
+                            <strong>📝 Changes Detected:</strong>
+                            <ul>${current.changesDetected.map(c => `<li>${c}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                    
+                    ${current.ratingDeltas ? `
+                        <div class="comparative-section">
+                            <strong>📊 Rating Deltas:</strong>
+                            <div class="rating-deltas">
+                                ${Object.entries(current.ratingDeltas).map(([key, delta]) => `
+                                    <span class="rating-delta ${delta.current > delta.previous ? 'improved' : delta.current < delta.previous ? 'regressed' : 'unchanged'}">
+                                        ${key}: ${delta.previous || '?'}→${delta.current || '?'} 
+                                        ${delta.current > delta.previous ? '↑' : delta.current < delta.previous ? '↓' : '–'}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${current.resolvedIssues?.length ? `
+                        <div class="comparative-section resolved">
+                            <strong>✅ Resolved Issues:</strong>
+                            <ul>${current.resolvedIssues.map(i => `<li>${i}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                    
+                    ${current.newIssues?.length ? `
+                        <div class="comparative-section new-issues">
+                            <strong>⚠️ New Issues:</strong>
+                            <ul>${current.newIssues.map(i => `<li>${i}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                    
+                    ${current.regressions?.length ? `
+                        <div class="comparative-section regressions">
+                            <strong>📉 Regressions:</strong>
+                            <ul>${current.regressions.map(i => `<li>${i}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                    
+                    ${current.overallVerdict ? `
+                        <div class="comparative-verdict">
+                            <strong>🎯 Verdict:</strong> ${current.overallVerdict}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Previous log entries (collapsible)
+        if (log.length > 0) {
+            html += `
+                <details class="comparative-log">
+                    <summary>📜 Previous Updates (${log.length})</summary>
+                    <div class="log-entries">
+                        ${log.slice().reverse().map((entry, i) => `
+                            <div class="log-entry">
+                                <div class="log-header">
+                                    <span class="log-date">${new Date(entry.timestamp).toLocaleString()}</span>
+                                </div>
+                                <div class="log-verdict">${entry.reasoning}</div>
+                                ${entry.changesDetected?.length ? `<div class="log-changes">Changes: ${entry.changesDetected.slice(0, 3).join(', ')}${entry.changesDetected.length > 3 ? '...' : ''}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        return html;
     }
 
     // Linkify helper remains the same
