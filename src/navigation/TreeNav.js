@@ -315,9 +315,11 @@ export class TreeNav {
         let html = this.renderItem({ section: 'plot', id: 'plot-grid-default', type: 'plot-grid', label: `Plot for ${state.metadata.title}`, icon: 'grid' });
 
         if (state.plot.plotLines) {
-            state.plot.plotLines.forEach(pl => {
-                html += this.renderItem({ section: 'plot', id: pl.id, type: pl.type || 'plotline', label: pl.title, icon: pl.type === 'grid' ? 'grid' : 'dot', depth: 1 });
-            });
+            state.plot.plotLines
+                .filter(pl => pl.type === 'grid')
+                .forEach(pl => {
+                    html += this.renderItem({ section: 'plot', id: pl.id, type: 'plot-grid', label: pl.title, icon: 'grid', depth: 1 });
+                });
         }
 
         return html;
@@ -495,7 +497,6 @@ export class TreeNav {
         switch (section) {
             case 'plot':
                 items = [
-                    { label: 'Add Plot Line', onClick: () => this.addPlotLine() },
                     { label: 'Add Plot Grid', onClick: () => this.addPlotGrid() }
                 ];
                 break;
@@ -536,12 +537,24 @@ export class TreeNav {
                     { divider: true },
                     { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
                     { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
-                    ...(hasAnalysis ? [{ label: '🗑️ Delete Analysis', onClick: () => this.deletePartAnalysis(id) }] : []),
                     { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
-                    ...(hasWorldInfo ? [{ label: '🗑️ Delete World Info', onClick: () => this.deleteWorldInfo(id) }] : []),
                     { divider: true },
                     { label: 'Rename', onClick: () => this.rename('part', id) },
                     { label: 'Delete', onClick: () => this.deletePart(id) }
+                ];
+                break;
+            case 'analysis':
+                const analysisPartId = id.replace('analysis-', '');
+                items = [
+                    { label: '🔄 Regenerate Analysis', onClick: () => this.generatePartAnalysis(analysisPartId) },
+                    { label: '🗑️ Delete Analysis', onClick: () => this.deletePartAnalysis(analysisPartId) }
+                ];
+                break;
+            case 'summary':
+                const summaryPartId = id.replace('summary-', '');
+                items = [
+                    { label: '🔄 Regenerate Summary', onClick: () => this.generatePartSummary(summaryPartId) },
+                    { label: '🗑️ Delete Summary', onClick: () => this.deletePartSummary(summaryPartId) }
                 ];
                 break;
             case 'chapter':
@@ -1470,6 +1483,22 @@ Write a clear, narrative summary of the story events in this specific part:`;
             console.error('Summary generation failed:', error);
             editor.innerHTML = originalContent;
             alert('Failed to generate summary: ' + error.message);
+        }
+    }
+
+    deletePartSummary(partId) {
+        if (!confirm('Delete this summary? This cannot be undone.')) return;
+
+        if (this.app.state.summaries?.parts?.[partId]) {
+            delete this.app.state.summaries.parts[partId];
+            this.app.save();
+            this.render();
+
+            // If currently viewing this summary, clear editor
+            if (this.app.currentContext?.type === 'summary' && this.app.currentContext?.partId === partId) {
+                const editor = document.getElementById('editor-content');
+                if (editor) editor.innerHTML = '<div class="empty-state">Summary deleted</div>';
+            }
         }
     }
 

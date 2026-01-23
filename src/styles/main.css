@@ -554,6 +554,17 @@ body {
   box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
 }
 
+#btn-thesaurus {
+  color: #10b981;
+  /* Emerald */
+}
+
+#btn-thesaurus:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
 .icon-btn-sm {
   width: 28px;
   height: 28px;
@@ -603,6 +614,7 @@ body.focus-mode .right-panel,
 body.focus-mode .top-bar,
 body.focus-mode .alive-panel,
 body.focus-mode .right-panel-toggle,
+body.focus-mode .agent-drawer-tab,
 body.focus-mode .status-bar {
   opacity: 0 !important;
   pointer-events: none !important;
