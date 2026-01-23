@@ -307,6 +307,7 @@ export class AgentPanel {
                 }
             );
 
+
             // Store in history (keep full response including mode prefix for context)
             this.history.push(
                 { role: 'user', content: cleanInput },

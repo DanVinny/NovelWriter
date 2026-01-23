@@ -391,6 +391,15 @@ Analyze the user's request and respond in the most appropriate style:
 - **Discussion or exploration?** → Be CONVERSATIONAL (Chatty style)
 - **Stuck or seeking options?** → Offer ALTERNATIVES (Brainstorm style)
 
+## IMPORTANT: REQUIRED OUTPUT FORMAT
+You MUST start your response with a mode tag indicating which style you chose.
+Format: \`[MODE: <style>]\`
+
+Examples:
+- \`[MODE: Quick]\` Yes, that works.
+- \`[MODE: Planning]\` Here is a plan for the new chapter...
+- \`[MODE: Chatty]\` That's an interesting idea!
+
 Match your response length and style to what the user actually needs. Don't over-explain simple things. Don't under-explain complex things.`;
     }
 }
