@@ -879,24 +879,62 @@ export class ConnectionWeb {
         });
 
         // Gather world info
-        const worldInfo = this.app.state.manuscript?.worldInfo || {};
         let worldInfoText = '';
 
-        if (worldInfo.cast?.length > 0) {
-            worldInfoText += '\n=== CHARACTERS (Cast) ===\n';
-            worldInfo.cast.forEach(cast => {
-                worldInfoText += `\nCast: ${cast.name}\n`;
-                cast.characters?.forEach(char => {
-                    worldInfoText += `- ${char.name}: ${char.description || ''}\n`;
-                });
+        // 1. Get Characters from global database
+        const characters = this.app.state.characters || [];
+        if (characters.length > 0) {
+            worldInfoText += '\n=== CHARACTERS DATABASE ===\n';
+            characters.forEach(char => {
+                worldInfoText += `- ${char.name} (${char.role}): ${char.description || ''}\n`;
             });
         }
 
-        if (worldInfo.locations?.length > 0) {
-            worldInfoText += '\n=== LOCATIONS ===\n';
-            worldInfo.locations.forEach(loc => {
-                worldInfoText += `- ${loc.name}: ${loc.description || ''}\n`;
-            });
+        // 2. Get extracted World Info from parts
+        const worldInfoParts = this.app.state.worldInfo?.parts || {};
+
+        // Aggregate unique items
+        const facts = new Set();
+        const locations = new Set();
+        const timeline = new Set();
+        const relationships = new Set();
+
+        Object.values(worldInfoParts).forEach(info => {
+            // Helper to add strings or objects
+            const addItems = (items, set) => {
+                if (!items) return;
+                items.forEach(item => {
+                    if (typeof item === 'string') {
+                        set.add(item);
+                    } else if (item.name && item.description) {
+                        set.add(`${item.name}: ${item.description}`);
+                    } else if (item.event && item.time) {
+                        set.add(`${item.event} (${item.time})`);
+                    } else {
+                        // Fallback purely based on what keys exist
+                        const val = Object.values(item).join(': ');
+                        if (val) set.add(val);
+                    }
+                });
+            };
+
+            addItems(info.facts, facts);
+            addItems(info.locations, locations);
+            addItems(info.timeline, timeline);
+            addItems(info.relationships, relationships);
+        });
+
+        if (facts.size > 0) {
+            worldInfoText += '\n=== ESTABLISHED FACTS ===\n' + Array.from(facts).map(f => `- ${f}`).join('\n') + '\n';
+        }
+        if (locations.size > 0) {
+            worldInfoText += '\n=== LOCATIONS ===\n' + Array.from(locations).map(l => `- ${l}`).join('\n') + '\n';
+        }
+        if (relationships.size > 0) {
+            worldInfoText += '\n=== RELATIONSHIPS ===\n' + Array.from(relationships).map(r => `- ${r}`).join('\n') + '\n';
+        }
+        if (timeline.size > 0) {
+            worldInfoText += '\n=== TIMELINE ===\n' + Array.from(timeline).map(t => `- ${t}`).join('\n') + '\n';
         }
 
         return { manuscriptText, worldInfoText };

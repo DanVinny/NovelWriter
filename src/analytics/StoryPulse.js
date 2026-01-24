@@ -8,7 +8,8 @@ export class StoryPulse {
         this.graphContainer = document.getElementById('pulse-graph-container');
         this.notesContainer = document.getElementById('pulse-notes-container');
         this.btnRun = document.getElementById('btn-run-pulse');
-        this.checkboxes = document.querySelectorAll('.pulse-controls input[type="checkbox"]');
+        this.checkboxes = document.querySelectorAll('.metric-checkbox');
+        this.prevCheckboxes = document.querySelectorAll('.prev-checkbox');
 
         this.isAnalyzing = false;
 
@@ -46,6 +47,10 @@ export class StoryPulse {
         this.btnRun.addEventListener('click', () => this.runAnalysis());
 
         this.checkboxes.forEach(cb => {
+            cb.addEventListener('change', () => this.renderGraph());
+        });
+
+        this.prevCheckboxes.forEach(cb => {
             cb.addEventListener('change', () => this.renderGraph());
         });
     }
@@ -88,6 +93,211 @@ export class StoryPulse {
         return { chapters, manuscriptText };
     }
 
+    /**
+     * Build content hashes for each chapter to detect changes
+     */
+    buildChapterHashes(manuscriptText, chapters) {
+        const hashes = [];
+        for (let i = 0; i < chapters.length; i++) {
+            // Extract chapter content between markers
+            const marker = `=== ${chapters[i]} ===`;
+            const startIdx = manuscriptText.indexOf(marker);
+            const nextMarkerIdx = i < chapters.length - 1
+                ? manuscriptText.indexOf(`=== ${chapters[i + 1]} ===`)
+                : manuscriptText.length;
+
+            let chapterContent = '';
+            if (startIdx !== -1) {
+                const contentStart = startIdx + marker.length;
+                const contentEnd = nextMarkerIdx !== -1 ? nextMarkerIdx : manuscriptText.length;
+                chapterContent = manuscriptText.substring(contentStart, contentEnd).trim();
+            }
+
+            // Create a simple hash of the content
+            const hash = this.simpleHash(chapterContent);
+            hashes.push(hash);
+        }
+        return hashes;
+    }
+
+    /**
+     * Simple hash function for content comparison
+     */
+    simpleHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    /**
+     * Calculate similarity between two strings (0-1)
+     * Uses Levenshtein distance ratio
+     */
+    calculateSimilarity(str1, str2) {
+        if (str1 === str2) return 1;
+        if (str1.length === 0 || str2.length === 0) return 0;
+
+        const len1 = str1.length;
+        const len2 = str2.length;
+
+        // Create distance matrix
+        const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+        // Initialize first row and column
+        for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+        for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+        // Fill matrix
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,        // deletion
+                    matrix[i][j - 1] + 1,        // insertion
+                    matrix[i - 1][j - 1] + cost   // substitution
+                );
+            }
+        }
+
+        const distance = matrix[len1][len2];
+        const maxLength = Math.max(len1, len2);
+        return 1 - (distance / maxLength);
+    }
+
+    /**
+     * Extract chapter content from manuscript text
+     */
+    extractChapterContent(manuscriptText, chapterName) {
+        const marker = `=== ${chapterName} ===`;
+        const startIdx = manuscriptText.indexOf(marker);
+        if (startIdx === -1) return '';
+
+        const contentStart = startIdx + marker.length;
+        const nextMarkerIdx = manuscriptText.indexOf('=== ', contentStart);
+        const contentEnd = nextMarkerIdx !== -1 ? nextMarkerIdx : manuscriptText.length;
+
+        return manuscriptText.substring(contentStart, contentEnd).trim();
+    }
+
+    /**
+     * Compare chapters based on content hashes and fuzzy matching
+     */
+    compareChapters(prevChapters, currChapters, currHashes, prevHashes, prevManuscriptText, currManuscriptText) {
+        const result = {
+            matched: [],
+            added: [],
+            removed: [],
+            modified: []
+        };
+
+        // Build hash-to-chapter mappings
+        const prevHashMap = new Map();
+        prevHashes.forEach((hash, idx) => {
+            if (!prevHashMap.has(hash)) {
+                prevHashMap.set(hash, []);
+            }
+            prevHashMap.get(hash).push({ chapter: prevChapters[idx], idx });
+        });
+
+        const usedPrevIndices = new Set();
+
+        // Match chapters by content hash or fuzzy similarity
+        currHashes.forEach((hash, currIdx) => {
+            const currChapterName = currChapters[currIdx];
+
+            if (prevHashMap.has(hash) && prevHashMap.get(hash).length > 0) {
+                // Found matching content (exact hash match)
+                const match = prevHashMap.get(hash)[0];
+                result.matched.push({
+                    prevChapter: match.chapter,
+                    currChapter: currChapterName,
+                    prevIdx: match.idx,
+                    currIdx: currIdx,
+                    matchType: 'exact'
+                });
+                usedPrevIndices.add(match.idx);
+            } else {
+                // Try fuzzy matching with 70% similarity threshold
+                const currContent = this.extractChapterContent(currManuscriptText, currChapterName);
+                let bestMatch = null;
+                let bestSimilarity = 0;
+                let bestPrevIdx = -1;
+
+                prevHashes.forEach((prevHash, prevIdx) => {
+                    if (!usedPrevIndices.has(prevIdx)) {
+                        const prevContent = this.extractChapterContent(prevManuscriptText, prevChapters[prevIdx]);
+                        const similarity = this.calculateSimilarity(currContent, prevContent);
+
+                        if (similarity >= 0.7 && similarity > bestSimilarity) {
+                            bestMatch = {
+                                prevChapter: prevChapters[prevIdx],
+                                currChapter: currChapterName,
+                                prevIdx: prevIdx,
+                                currIdx: currIdx,
+                                similarity: similarity,
+                                matchType: 'fuzzy'
+                            };
+                            bestSimilarity = similarity;
+                            bestPrevIdx = prevIdx;
+                        }
+                    }
+                });
+
+                if (bestMatch) {
+                    // Found fuzzy match - treat as MODIFIED (identity tracked, but content changed)
+                    // Used to be 'matched', now moving to 'modified' so scores can update
+                    result.modified.push({
+                        prevChapter: bestMatch.prevChapter,
+                        currChapter: bestMatch.currChapter,
+                        prevIdx: bestMatch.prevIdx,
+                        currIdx: bestMatch.currIdx,
+                        similarity: bestMatch.similarity,
+                        matchType: 'fuzzy'
+                    });
+                    usedPrevIndices.add(bestPrevIdx);
+                } else {
+                    // No match found - check if it's a name match or truly new
+                    const nameMatchIdx = prevChapters.findIndex(
+                        (c, idx) => c === currChapterName && !usedPrevIndices.has(idx)
+                    );
+
+                    if (nameMatchIdx !== -1) {
+                        // Same name but different content (and below 70% similarity) → modified
+                        result.modified.push({
+                            prevChapter: prevChapters[nameMatchIdx],
+                            currChapter: currChapterName,
+                            prevIdx: nameMatchIdx,
+                            currIdx: currIdx
+                        });
+                        usedPrevIndices.add(nameMatchIdx);
+                    } else {
+                        // New chapter
+                        result.added.push({
+                            chapter: currChapterName,
+                            idx: currIdx
+                        });
+                    }
+                }
+            }
+        });
+
+        // Find removed chapters (present in prev but not matched)
+        prevHashes.forEach((hash, idx) => {
+            if (!usedPrevIndices.has(idx)) {
+                result.removed.push({
+                    chapter: prevChapters[idx],
+                    idx: idx
+                });
+            }
+        });
+
+        return result;
+    }
+
     async runAnalysis() {
         if (this.isAnalyzing) return;
 
@@ -123,6 +333,10 @@ export class StoryPulse {
                 chapters: chapters,
                 timestamp: new Date().toISOString()
             },
+            // Store previous metrics for comparison view
+            _previousMetrics: isRegenerate ? previousAnalysis.metrics : null,
+            // Store previous chapters to correctly map the previous metrics
+            _previousChapters: isRegenerate ? (previousAnalysis._snapshot?.chapters || previousAnalysis.chapters) : null,
             analyzedAt: new Date().toISOString()
         };
 
@@ -174,11 +388,19 @@ export class StoryPulse {
 
         // ========== PHASE 16: INCREMENTAL UPDATE PROMPT ==========
         if (isRegenerate && previousAnalysis) {
+            // Use the original snapshot (not the most recent one) for proper comparison
             const prevSnapshot = previousAnalysis._snapshot?.manuscriptText || '';
             const prevChapters = previousAnalysis._snapshot?.chapters || [];
             const prevScores = previousAnalysis.metrics?.[metric]?.scores || [];
             const prevJustification = previousAnalysis.metrics?.[metric]?.justification || '';
             const prevTimestamp = previousAnalysis.analyzedAt || 'unknown';
+
+            // Build chapter mapping with content hashes for better tracking
+            const prevChapterHashes = this.buildChapterHashes(prevSnapshot, prevChapters);
+            const currentChapterHashes = this.buildChapterHashes(manuscriptText, chapters);
+
+            // Find matching and changed chapters
+            const chapterMapping = this.compareChapters(prevChapters, chapters, currentChapterHashes, prevChapterHashes, prevSnapshot, manuscriptText);
 
             prompt = `You are updating your EXISTING analysis for "${this.metricLabels[metric]}". You are NOT starting fresh.
 
@@ -188,7 +410,7 @@ export class StoryPulse {
 
 Analysis conducted at: ${prevTimestamp}
 
-Previous chapters: ${prevChapters.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+Previous chapters: ${prevChapters.map((c, i) => `${i + 1}. ${c} [hash: ${prevChapterHashes[i]}]`).join('\n')}
 
 Previous scores for ${this.metricLabels[metric]}: ${JSON.stringify(prevScores)}
 
@@ -205,7 +427,27 @@ ${this.metrics.map(m => {
             }).join('\n\n')}
 
 ==========================================================================
-## MANUSCRIPT AT THAT TIME
+## CHAPTER COMPARISON (CRITICAL FOR SCORE TRACKING)
+==========================================================================
+
+${chapterMapping.matched.length > 0 ? `MATCHED CHAPTERS (content IDENTICAL - scores MUST stay the same):
+${chapterMapping.matched.map(m => `  • ${m.prevChapter} (prev index ${m.prevIdx}) → ${m.currChapter} (new index ${m.currIdx}) [EXACT MATCH]`).join('\n')}
+` : 'No exact matched chapters found.\n'}
+
+${chapterMapping.added.length > 0 ? `NEW CHAPTERS (need fresh scoring):
+${chapterMapping.added.map(a => `  • ${a.chapter} (new index ${a.idx})`).join('\n')}
+` : 'No new chapters.\n'}
+
+${chapterMapping.removed.length > 0 ? `REMOVED CHAPTERS (scores no longer needed):
+${chapterMapping.removed.map(r => `  • ${r.chapter} (was index ${r.idx})`).join('\n')}
+` : 'No removed chapters.\n'}
+
+${chapterMapping.modified.length > 0 ? `MODIFIED CHAPTERS (content changed - PLEASE RE-EVALUATE SCORES):
+${chapterMapping.modified.map(m => `  • ${m.currChapter} (new index ${m.currIdx}) - was: ${m.prevChapter} (prev index ${m.prevIdx})${m.matchType === 'fuzzy' ? ` [fuzzy match: ${(m.similarity * 100).toFixed(0)}% similar]` : ' [significant edits]'}`).join('\n')}
+` : 'No modified chapters.\n'}
+
+==========================================================================
+## MANUSCRIPT AT TIME OF ORIGINAL ANALYSIS
 ==========================================================================
 
 ${prevSnapshot.substring(0, 150000)}
@@ -214,7 +456,7 @@ ${prevSnapshot.substring(0, 150000)}
 ## CURRENT MANUSCRIPT (NOW)
 ==========================================================================
 
-Current chapters: ${chapters.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+Current chapters: ${chapters.map((c, i) => `${i + 1}. ${c} [hash: ${currentChapterHashes[i]}]`).join('\n')}
 
 ${manuscriptText.substring(0, 150000)}
 
@@ -224,29 +466,33 @@ ${manuscriptText.substring(0, 150000)}
 
 **CRITICAL RULES:**
 
-1. **START WITH YOUR PREVIOUS SCORES** - Copy your previous scores array exactly as your starting point.
+1. **START WITH YOUR PREVIOUS SCORES** - Use your previous scores as the baseline.
 
-2. **COMPARE THE TWO MANUSCRIPTS** - Find what ACTUALLY changed between them.
-   - If manuscripts are IDENTICAL, return your EXACT previous scores unchanged.
-   - If a specific chapter's content is unchanged, that chapter's score MUST remain the same.
+2. **USE THE CHAPTER COMPARISON** - The chapter comparison above tells you:
+   - MATCHED chapters have IDENTICAL content → their scores MUST remain EXACTLY the same
+   - MODIFIED chapters have changed content (fuzzy or significant edits) → you SHOULD re-evaluate these scores based on the changes
+   - NEW chapters have no previous score → provide fresh scores
+   - REMOVED chapters should be dropped from the scores array
 
-3. **ONLY UPDATE CHANGED CHAPTERS** - You may only change a chapter's score if:
-   - The chapter content was significantly rewritten
-   - A new chapter was added (give it a fresh score)
-   - A chapter was removed (remove that score)
+3. **BUILD THE NEW SCORES ARRAY** based on the chapter comparison:
+   - Place each current chapter's score in the correct position
+   - For MATCHED chapters, use the EXACT previous score at the correct old index
+   - For NEW chapters, provide fresh scores
+   - For MODIFIED chapters, provide updated scores based on the new content
 
-4. **PRESERVE STABILITY** - Unchanged chapters = unchanged scores. No random adjustments.
+4. **PRESERVE STABILITY** - If a chapter is listed as "MATCHED" (exact), its score must be identical to the previous analysis. No random adjustments.
 
 ## OUTPUT FORMAT
 
 {
-  "scores": [...array of ${chapters.length} numbers, one per chapter...],
-  "justification": "Explain what changed (if anything) and why scores were updated or kept the same.",
+  "scores": [...array of ${chapters.length} numbers, one per chapter in CURRENT order...],
+  "justification": "Explain what changed based on the chapter comparison and how scores were updated.",
   "manuscriptChanged": true/false,
-  "changedChapters": [list of chapter numbers that had score changes, or empty if no changes]
+  "changedChapters": [list of current chapter numbers that had score changes, or empty if no changes],
+  "matchedChapters": ${JSON.stringify(chapterMapping.matched.map(m => ({ oldIndex: m.prevIdx, newIndex: m.currIdx })))}
 }
 
-**REMEMBER**: If manuscripts are identical, return {"manuscriptChanged": false} and your EXACT previous scores array.`;
+**REMEMBER**: MATCHED chapters (exact matches) MUST have identical scores. MODIFIED chapters (fuzzy matches) should be re-scored.`;
 
         } else {
             // Fresh analysis prompt (first run)
@@ -282,16 +528,50 @@ ${manuscriptText.substring(0, 300000)}`;
             const jsonStr = response.replace(/```json/g, '').replace(/```/g, '').trim();
             const parsed = JSON.parse(jsonStr);
 
-            // Validate
+            // Validate scores array
             if (!Array.isArray(parsed.scores) || parsed.scores.length !== chapters.length) {
                 throw new Error('Invalid scores array length');
             }
 
+            const scores = parsed.scores.map(s => Math.max(1, Math.min(10, parseInt(s) || 5)));
+
+            // Validate matched chapters if regenerate
+            if (isRegenerate && previousAnalysis && parsed.matchedChapters && Array.isArray(parsed.matchedChapters)) {
+                const prevScores = previousAnalysis.metrics?.[metric]?.scores || [];
+                let validationErrors = [];
+
+                parsed.matchedChapters.forEach(match => {
+                    const oldIdx = match.oldIndex;
+                    const newIdx = match.newIndex;
+
+                    if (prevScores[oldIdx] !== undefined && scores[newIdx] !== undefined) {
+                        if (prevScores[oldIdx] !== scores[newIdx]) {
+                            validationErrors.push(
+                                `Chapter at index ${newIdx} was marked as matched but score changed from ${prevScores[oldIdx]} to ${scores[newIdx]}`
+                            );
+                        }
+                    }
+                });
+
+                if (validationErrors.length > 0) {
+                    console.warn(`StoryPulse validation warnings for ${metric}:`, validationErrors);
+                    // Auto-correct matched chapters to preserve previous scores
+                    parsed.matchedChapters.forEach(match => {
+                        const oldIdx = match.oldIndex;
+                        const newIdx = match.newIndex;
+                        if (prevScores[oldIdx] !== undefined) {
+                            scores[newIdx] = prevScores[oldIdx];
+                        }
+                    });
+                }
+            }
+
             return {
-                scores: parsed.scores.map(s => Math.max(1, Math.min(10, parseInt(s) || 5))),
+                scores: scores,
                 justification: parsed.justification || 'No justification provided.',
                 manuscriptChanged: parsed.manuscriptChanged,
-                changedChapters: parsed.changedChapters || []
+                changedChapters: parsed.changedChapters || [],
+                matchedChapters: parsed.matchedChapters || []
             };
         } catch (e) {
             console.error('Failed to parse metric score', metric, response);
@@ -420,6 +700,57 @@ ${manuscriptText.substring(0, 300000)}`;
             points.forEach(p => {
                 svgHtml += `<circle cx="${p.x}" cy="${p.y}" class="pulse-point" stroke="${color}" data-val="${this.metricLabels[metric]}: ${p.val}\n${p.ch}" />`;
             });
+
+            // Draw Previous Analysis Line (dotted) if checkbox is checked
+            const prevCheckbox = document.querySelector(`.prev-checkbox[data-metric="${metric}"]`);
+            if (prevCheckbox && prevCheckbox.checked && data._previousMetrics && data._snapshot) {
+                const prevMetricData = data._previousMetrics[metric];
+
+                if (prevMetricData && prevMetricData.scores) {
+                    const prevScores = prevMetricData.scores;
+                    // Use the SPECIFIC chapters list that matches these scores
+                    const prevChapters = data._previousChapters || [];
+                    let prevPoints = [];
+
+                    // Map previous scores to current chapter positions
+                    prevScores.forEach((score, prevIdx) => {
+                        // Find if this previous chapter still exists
+                        const prevChapter = prevChapters[prevIdx];
+                        const currIdx = chapters.findIndex(ch => ch === prevChapter);
+
+                        if (currIdx !== -1) {
+                            prevPoints.push({
+                                x: padding.left + currIdx * xStep,
+                                y: getY(score),
+                                val: score,
+                                ch: prevChapter
+                            });
+                        }
+                    });
+
+                    if (prevPoints.length > 0) {
+                        // Draw dotted line for previous scores
+                        let prevDPath = `M ${prevPoints[0].x} ${prevPoints[0].y}`;
+
+                        for (let i = 0; i < prevPoints.length - 1; i++) {
+                            const p0 = prevPoints[i];
+                            const p1 = prevPoints[i + 1];
+                            const cp1x = p0.x + (p1.x - p0.x) * 0.4;
+                            const cp1y = p0.y;
+                            const cp2x = p1.x - (p1.x - p0.x) * 0.4;
+                            const cp2y = p1.y;
+                            prevDPath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p1.x} ${p1.y}`;
+                        }
+
+                        svgHtml += `<path d="${prevDPath}" class="pulse-line-path pulse-line-dotted" stroke="${color}" stroke-dasharray="5,5" stroke-width="2" opacity="0.5" />`;
+
+                        // Draw smaller dots for previous scores
+                        prevPoints.forEach(p => {
+                            svgHtml += `<circle cx="${p.x}" cy="${p.y}" r="3" stroke="${color}" fill="none" stroke-width="1.5" class="pulse-point-prev" data-val="${this.metricLabels[metric]} (PREV): ${p.val}\n${p.ch}" />`;
+                        });
+                    }
+                }
+            }
         });
 
         svgHtml += `</svg></div>`;
@@ -428,7 +759,7 @@ ${manuscriptText.substring(0, 300000)}`;
         this.graphContainer.innerHTML = svgHtml;
 
         // Tooltip events
-        this.graphContainer.querySelectorAll('.pulse-point').forEach(dot => {
+        this.graphContainer.querySelectorAll('.pulse-point, .pulse-point-prev').forEach(dot => {
             dot.addEventListener('mouseenter', (e) => {
                 const tip = document.getElementById('pulse-tooltip');
                 tip.innerText = e.target.getAttribute('data-val');

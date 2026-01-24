@@ -1666,6 +1666,26 @@ body.focus-mode #btn-focus-mode {
   font-weight: 500;
 }
 
+.pulse-controls .prev-checkbox {
+  opacity: 0.8;
+}
+
+.pulse-controls .prev-checkbox:checked {
+  opacity: 1;
+}
+
+.pulse-controls .prev-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pulse-controls .prev-checkbox:checked+.prev-label {
+  color: var(--accent-primary);
+}
+
 .pulse-graph-container {
   min-height: 350px;
   width: 100%;
