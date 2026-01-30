@@ -469,18 +469,18 @@ ${manuscriptText.substring(0, 150000)}
 1. **START WITH YOUR PREVIOUS SCORES** - Use your previous scores as the baseline.
 
 2. **USE THE CHAPTER COMPARISON** - The chapter comparison above tells you:
-   - MATCHED chapters have IDENTICAL content → their scores MUST remain EXACTLY the same
+   - MATCHED chapters have IDENTICAL content → you generally should keep scores similar, but MAY adjust them if the surrounding context (reordering) changes their pacing or impact
    - MODIFIED chapters have changed content (fuzzy or significant edits) → you SHOULD re-evaluate these scores based on the changes
    - NEW chapters have no previous score → provide fresh scores
    - REMOVED chapters should be dropped from the scores array
 
 3. **BUILD THE NEW SCORES ARRAY** based on the chapter comparison:
    - Place each current chapter's score in the correct position
-   - For MATCHED chapters, use the EXACT previous score at the correct old index
+   - For MATCHED chapters, START with the previous score but adjust if necessary based on new context
    - For NEW chapters, provide fresh scores
    - For MODIFIED chapters, provide updated scores based on the new content
 
-4. **PRESERVE STABILITY** - If a chapter is listed as "MATCHED" (exact), its score must be identical to the previous analysis. No random adjustments.
+4. **PRESERVE STABILITY** - Do not make random changes. Only adjust scores for matched chapters if the narrative flow has significantly shifted due to reordering.
 
 ## OUTPUT FORMAT
 
@@ -554,15 +554,8 @@ ${manuscriptText.substring(0, 300000)}`;
                 });
 
                 if (validationErrors.length > 0) {
-                    console.warn(`StoryPulse validation warnings for ${metric}:`, validationErrors);
-                    // Auto-correct matched chapters to preserve previous scores
-                    parsed.matchedChapters.forEach(match => {
-                        const oldIdx = match.oldIndex;
-                        const newIdx = match.newIndex;
-                        if (prevScores[oldIdx] !== undefined) {
-                            scores[newIdx] = prevScores[oldIdx];
-                        }
-                    });
+                    console.log(`StoryPulse: AI adjusted scores for matched chapters (${metric}):`, validationErrors);
+                    // We allow the AI to update scores even for matched chapters if context changed
                 }
             }
 

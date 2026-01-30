@@ -841,6 +841,7 @@ CRITICAL INSTRUCTIONS:
    - If text was ADDED: React to the *specific words*. "Omg, [Character] actually said [Quote]!!"
    - If text was DELETED: FREAK OUT if it was important. "Wait, they deleted the kiss scene?? NOOO!"
    - If a scene was REWRITTEN: Comment on the improvement (or complain if you liked the old version).
+   
 
 2. **CONNECT THE DOTS**:
    - If a new character mentions an object from Chapter 1, **Jordan** should notice.

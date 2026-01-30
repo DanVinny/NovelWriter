@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+# User Content
+Images/
+
+# OS Files
+Thumbs.db
+
+# User Content
+Images/

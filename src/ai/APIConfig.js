@@ -74,42 +74,40 @@ export class APIConfig {
     }
 
     openModal() {
-        const state = this.app.state;
-
-        // Load current settings (empty defaults)
+        // Load current settings from localStorage
         if (this.aiProvider) {
-            this.aiProvider.value = state.settings.aiProvider || '';
+            this.aiProvider.value = localStorage.getItem('novelwriter-ai-provider') || '';
         }
         if (this.aiApiKey) {
-            this.aiApiKey.value = state.settings.aiApiKey || '';
+            this.aiApiKey.value = localStorage.getItem('novelwriter-ai-apikey') || '';
         }
         if (this.aiModel) {
-            this.aiModel.value = state.settings.aiModel || '';
+            this.aiModel.value = localStorage.getItem('novelwriter-ai-model') || '';
         }
 
         // Load Alive Editor settings
         if (this.aliveProvider) {
-            this.aliveProvider.value = state.settings.aliveProvider || '';
+            this.aliveProvider.value = localStorage.getItem('novelwriter-alive-provider') || '';
         }
         if (this.aliveApiKey) {
-            this.aliveApiKey.value = state.settings.aliveApiKey || '';
+            this.aliveApiKey.value = localStorage.getItem('novelwriter-alive-apikey') || '';
         }
         if (this.aliveModel) {
-            this.aliveModel.value = state.settings.aliveModel || '';
+            this.aliveModel.value = localStorage.getItem('novelwriter-alive-model') || '';
         }
 
         // Load Image Model settings
         if (this.imageProvider) {
-            this.imageProvider.value = state.settings.imageProvider || '';
+            this.imageProvider.value = localStorage.getItem('novelwriter-image-provider') || '';
         }
         if (this.imageApiKey) {
-            this.imageApiKey.value = state.settings.imageApiKey || '';
+            this.imageApiKey.value = localStorage.getItem('novelwriter-image-apikey') || '';
         }
         if (this.imageModel) {
-            this.imageModel.value = state.settings.imageModel || '';
+            this.imageModel.value = localStorage.getItem('novelwriter-image-model') || '';
         }
         if (this.imageStyle) {
-            this.imageStyle.value = state.settings.imageStylePrefix || '';
+            this.imageStyle.value = localStorage.getItem('novelwriter-image-style') || '';
         }
 
         // Reset connection status
@@ -126,43 +124,21 @@ export class APIConfig {
     }
 
     saveConfig() {
-        const state = this.app.state;
-
         // Update AI settings
-        if (this.aiProvider) {
-            state.settings.aiProvider = this.aiProvider.value.trim();
-        }
-        if (this.aiApiKey) {
-            state.settings.aiApiKey = this.aiApiKey.value.trim();
-        }
-        if (this.aiModel) {
-            state.settings.aiModel = this.aiModel.value.trim();
-        }
+        if (this.aiProvider) localStorage.setItem('novelwriter-ai-provider', this.aiProvider.value.trim());
+        if (this.aiApiKey) localStorage.setItem('novelwriter-ai-apikey', this.aiApiKey.value.trim());
+        if (this.aiModel) localStorage.setItem('novelwriter-ai-model', this.aiModel.value.trim());
 
         // Update Alive Editor settings
-        if (this.aliveProvider) {
-            state.settings.aliveProvider = this.aliveProvider.value.trim();
-        }
-        if (this.aliveApiKey) {
-            state.settings.aliveApiKey = this.aliveApiKey.value.trim();
-        }
-        if (this.aliveModel) {
-            state.settings.aliveModel = this.aliveModel.value.trim();
-        }
+        if (this.aliveProvider) localStorage.setItem('novelwriter-alive-provider', this.aliveProvider.value.trim());
+        if (this.aliveApiKey) localStorage.setItem('novelwriter-alive-apikey', this.aliveApiKey.value.trim());
+        if (this.aliveModel) localStorage.setItem('novelwriter-alive-model', this.aliveModel.value.trim());
 
         // Update Image Model settings
-        if (this.imageProvider) {
-            state.settings.imageProvider = this.imageProvider.value.trim();
-        }
-        if (this.imageApiKey) {
-            state.settings.imageApiKey = this.imageApiKey.value.trim();
-        }
-        if (this.imageModel) {
-            state.settings.imageModel = this.imageModel.value.trim();
-        }
-        if (this.imageStyle) {
-            state.settings.imageStylePrefix = this.imageStyle.value.trim();
-        }
+        if (this.imageProvider) localStorage.setItem('novelwriter-image-provider', this.imageProvider.value.trim());
+        if (this.imageApiKey) localStorage.setItem('novelwriter-image-apikey', this.imageApiKey.value.trim());
+        if (this.imageModel) localStorage.setItem('novelwriter-image-model', this.imageModel.value.trim());
+        if (this.imageStyle) localStorage.setItem('novelwriter-image-style', this.imageStyle.value.trim());
 
         // Update AIService
         if (this.app.aiService) {
@@ -180,32 +156,27 @@ export class APIConfig {
             return;
         }
 
-        // Temporarily update config with current form values
-        const originalProvider = this.app.state.settings.aiProvider;
-        const originalKey = this.app.state.settings.aiApiKey;
-        const originalModel = this.app.state.settings.aiModel;
+        // Temporarily update config with current form values (write to localStorage temporarily is fine, or update memory)
+        // Since AIService reads from localStorage now, we must save to localStorage to test
 
-        this.app.state.settings.aiProvider = this.aiProvider?.value.trim() || '';
-        this.app.state.settings.aiApiKey = this.aiApiKey?.value.trim() || '';
-        this.app.state.settings.aiModel = this.aiModel?.value.trim() || '';
+        const originalProvider = localStorage.getItem('novelwriter-ai-provider');
+        const originalKey = localStorage.getItem('novelwriter-ai-apikey');
+        const originalModel = localStorage.getItem('novelwriter-ai-model');
+
+        localStorage.setItem('novelwriter-ai-provider', this.aiProvider?.value.trim() || '');
+        localStorage.setItem('novelwriter-ai-apikey', this.aiApiKey?.value.trim() || '');
+        localStorage.setItem('novelwriter-ai-model', this.aiModel?.value.trim() || '');
+
         this.app.aiService.updateConfig();
 
         // Validate required fields
-        if (!this.app.state.settings.aiProvider) {
+        if (!localStorage.getItem('novelwriter-ai-provider')) {
             this.showConnectionStatus('Provider URL is required', 'error');
-            this.app.state.settings.aiProvider = originalProvider;
-            this.app.state.settings.aiApiKey = originalKey;
-            this.app.state.settings.aiModel = originalModel;
-            this.app.aiService.updateConfig();
             return;
         }
 
-        if (!this.app.state.settings.aiApiKey) {
+        if (!localStorage.getItem('novelwriter-ai-apikey')) {
             this.showConnectionStatus('API Key is required', 'error');
-            this.app.state.settings.aiProvider = originalProvider;
-            this.app.state.settings.aiApiKey = originalKey;
-            this.app.state.settings.aiModel = originalModel;
-            this.app.aiService.updateConfig();
             return;
         }
 
@@ -220,11 +191,8 @@ export class APIConfig {
             } else {
                 this.showConnectionStatus(`✗ ${result.error}`, 'error');
 
-                // Restore original settings on failure
-                this.app.state.settings.aiProvider = originalProvider;
-                this.app.state.settings.aiApiKey = originalKey;
-                this.app.state.settings.aiModel = originalModel;
-                this.app.aiService.updateConfig();
+                // On failure we might want to revert? But usually user is editing to fix it.
+                // Keeping the values in the inputs is fine.
             }
         } catch (error) {
             this.showConnectionStatus(`✗ ${error.message}`, 'error');

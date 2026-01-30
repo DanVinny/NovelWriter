@@ -1,7 +1,17 @@
 {
   "name": "novelwriter",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "An agentic AI novel writing tool that treats manuscripts like codebases.",
+  "author": "akarshkashyap4-ui",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "writing",
+    "novel",
+    "agentic",
+    "llm"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

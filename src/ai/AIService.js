@@ -6,26 +6,25 @@
 export class AIService {
     constructor(app) {
         this.app = app;
-        this.baseUrl = app.state.settings.aiProvider || '';
-        this.apiKey = app.state.settings.aiApiKey || '';
-        this.model = app.state.settings.aiModel || '';
-
-        // Alive Editor API (secondary, faster model)
-        this.aliveBaseUrl = app.state.settings.aliveProvider || '';
-        this.aliveApiKey = app.state.settings.aliveApiKey || '';
-        this.aliveModel = app.state.settings.aliveModel || '';
+        this.loadConfig();
 
         this.isStreaming = false;
         this.abortController = null;
     }
 
+    loadConfig() {
+        this.baseUrl = localStorage.getItem('novelwriter-ai-provider') || '';
+        this.apiKey = localStorage.getItem('novelwriter-ai-apikey') || '';
+        this.model = localStorage.getItem('novelwriter-ai-model') || '';
+
+        // Alive Editor API (secondary, faster model)
+        this.aliveBaseUrl = localStorage.getItem('novelwriter-alive-provider') || '';
+        this.aliveApiKey = localStorage.getItem('novelwriter-alive-apikey') || '';
+        this.aliveModel = localStorage.getItem('novelwriter-alive-model') || '';
+    }
+
     updateConfig() {
-        this.baseUrl = this.app.state.settings.aiProvider || '';
-        this.apiKey = this.app.state.settings.aiApiKey || '';
-        this.model = this.app.state.settings.aiModel || '';
-        this.aliveBaseUrl = this.app.state.settings.aliveProvider || '';
-        this.aliveApiKey = this.app.state.settings.aliveApiKey || '';
-        this.aliveModel = this.app.state.settings.aliveModel || '';
+        this.loadConfig();
     }
 
     isConfigured() {
