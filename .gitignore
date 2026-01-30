@@ -27,11 +27,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-# User Content
-Images/
+# User Content (Root only)
+/Images/
 
 # OS Files
 Thumbs.db
-
-# User Content
-Images/
