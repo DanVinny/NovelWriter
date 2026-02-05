@@ -658,9 +658,14 @@ export class EventLine {
 
             // Call AI
             let response = '';
+            const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
             await this.app.aiService.sendMessageStream(
                 [
-                    { role: 'system', content: 'You are a story analyst that extracts key narrative events from manuscripts.' },
+                    {
+                        role: 'system', content: isScreenplay
+                            ? 'You are a script breakdown analyst that extracts key dramatic beats and story events from screenplays.'
+                            : 'You are a story analyst that extracts key narrative events from manuscripts.'
+                    },
                     { role: 'user', content: prompt }
                 ],
                 (chunk, accumulated) => {

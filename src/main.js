@@ -19,6 +19,8 @@ import { AliveEditor } from './alive/AliveEditor.js';
 import { EchoChamber } from './alive/EchoChamber.js';
 import { ConnectionWeb } from './graph/ConnectionWeb.js';
 import { EventLine } from './graph/EventLine.js';
+import { ScreenplayEditor } from './editor/ScreenplayEditor.js';
+import { FountainParser } from './editor/FountainParser.js';
 
 class NovelWriterApp {
   constructor() {
@@ -46,6 +48,7 @@ class NovelWriterApp {
     this.connectionWeb = new ConnectionWeb(this);
     this.eventLine = new EventLine(this);
     this.backupService = new BackupService(this);
+    this.screenplayEditor = null; // Initialized when needed for screenplay projects
 
     this.bindEvents();
     this.bindSelectionEvents();
@@ -425,17 +428,67 @@ class NovelWriterApp {
   }
 
   newProject() {
-    if (confirm('Create a new project? Your current project is auto-saved.')) {
-      this.state = this.storage.createNewProject();
-      this.currentContext = null;
-      this.render();
-      this.loadBookTitlePage();
+    // Show project type selector modal instead of immediate creation
+    this.showProjectTypeModal();
+  }
 
-      // Clear agent panel conversations for new project
-      if (this.agentPanel) {
-        this.agentPanel.loadActiveConversation();
-      }
+  showProjectTypeModal() {
+    const modal = document.getElementById('project-type-modal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+
+    // Handle overlay click to close
+    const overlay = modal.querySelector('.project-type-modal-overlay');
+    overlay.onclick = () => this.hideProjectTypeModal();
+
+    // Handle cancel button
+    const cancelBtn = document.getElementById('project-type-cancel');
+    if (cancelBtn) {
+      cancelBtn.onclick = () => this.hideProjectTypeModal();
     }
+
+    // Handle project type selection
+    modal.querySelectorAll('.project-type-btn').forEach(btn => {
+      btn.onclick = () => {
+        const projectType = btn.dataset.type;
+        this.createProjectOfType(projectType);
+        this.hideProjectTypeModal();
+      };
+    });
+  }
+
+  hideProjectTypeModal() {
+    const modal = document.getElementById('project-type-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  createProjectOfType(projectType) {
+    this.state = this.storage.createNewProject(projectType);
+    this.currentContext = null;
+
+    // Cleanup existing screenplay editor if switching project types
+    if (this.screenplayEditor) {
+      this.screenplayEditor.destroy();
+      this.screenplayEditor = null;
+    }
+
+    this.render();
+    this.loadBookTitlePage();
+
+    // Clear agent panel conversations for new project
+    if (this.agentPanel) {
+      this.agentPanel.loadActiveConversation();
+    }
+  }
+
+  /**
+   * Check if current project is a screenplay
+   */
+  isScreenplay() {
+    return this.state?.metadata?.projectType === 'screenplay';
   }
 
   async openReadingMode() {
@@ -480,8 +533,17 @@ class NovelWriterApp {
           ${moodArtHtml}`;
 
         chapter.scenes.forEach((scene, i) => {
+          // For screenplay: render formatted preview, for novel: raw content
+          let sceneHtml;
+          if (this.isScreenplay()) {
+            const parser = new FountainParser();
+            const elements = parser.parse(scene.content || '');
+            sceneHtml = `<div class="reading-screenplay-scene">${parser.toHTML(elements)}</div>`;
+          } else {
+            sceneHtml = scene.content || '<p><em>Empty scene</em></p>';
+          }
           html += `<div class="reading-scene">
-            <div class="reading-scene-content">${scene.content || '<p><em>Empty scene</em></p>'}</div>
+            <div class="reading-scene-content">${sceneHtml}</div>
           </div>`;
           if (i < chapter.scenes.length - 1) {
             html += '<div class="reading-separator">* * *</div>';
@@ -798,32 +860,60 @@ class NovelWriterApp {
     const scene = chapter?.scenes.find(s => s.id === sceneId);
     if (!scene) return;
 
-    const editor = document.getElementById('editor-content');
+    const editorContainer = document.getElementById('editor-content');
+
+    // Use screenplay editor for screenplay projects
+    if (this.isScreenplay()) {
+      // Hide the standard editor styling
+      editorContainer.contentEditable = 'false';
+      editorContainer.classList.add('screenplay-mode');
+
+      // Initialize or reuse screenplay editor
+      if (!this.screenplayEditor) {
+        this.screenplayEditor = new ScreenplayEditor(this, editorContainer);
+      }
+      this.screenplayEditor.loadScene(scene);
+
+      // Update word count from screenplay content
+      const content = scene.content || '';
+      this.updateWordCount(content);
+      return;
+    }
+
+    // Standard novel editor
+    editorContainer.contentEditable = 'true';
+    editorContainer.classList.remove('screenplay-mode');
+
+    // Destroy screenplay editor if it exists
+    if (this.screenplayEditor) {
+      this.screenplayEditor.destroy();
+      this.screenplayEditor = null;
+    }
 
     if (scene.content && scene.content.trim()) {
-      editor.innerHTML = scene.content;
-      editor.classList.remove('empty');
+      editorContainer.innerHTML = scene.content;
+      editorContainer.classList.remove('empty');
     } else {
-      editor.innerHTML = '';
-      editor.dataset.placeholder = `Start writing "${scene.title}"...`;
-      editor.classList.add('empty');
+      editorContainer.innerHTML = '';
+      editorContainer.dataset.placeholder = `Start writing "${scene.title}"...`;
+      editorContainer.classList.add('empty');
     }
 
     // Render suggestion blocks if any exist
     if (scene.suggestions?.items?.length > 0) {
-      this.renderSuggestions(editor, scene);
+      this.renderSuggestions(editorContainer, scene);
     }
 
     const handleFocus = () => {
-      if (editor.classList.contains('empty')) {
-        editor.classList.remove('empty');
-        editor.innerHTML = '<p></p>';
+      if (editorContainer.classList.contains('empty')) {
+        editorContainer.classList.remove('empty');
+        editorContainer.innerHTML = '<p></p>';
       }
     };
-    editor.removeEventListener('focus', handleFocus);
-    editor.addEventListener('focus', handleFocus);
+    editorContainer.removeEventListener('focus', handleFocus);
+    editorContainer.addEventListener('focus', handleFocus);
 
-    this.updateWordCount(editor.innerText);
+    this.updateWordCount(editorContainer.innerText);
   }
 
   renderSuggestions(editor, scene) {
@@ -901,23 +991,48 @@ class NovelWriterApp {
   }
 
   /**
-   * Parse the annotated text to extract suggestion placements
+   * Parse annotated text to find suggestion placement.
    * Format: "Anchor sentence. [S1: suggestion text]"
    */
   parseSuggestionPlacements(annotatedText) {
     const placements = [];
-    // Capture everything on the line before [S#: ...], using multiline mode
-    // This ensures we get full multi-sentence dialogue as the anchor
-    const regex = /^(.+?)\s*\[S(\d+):\s*([^\]]+)\]/gm;
-    let match;
 
-    while ((match = regex.exec(annotatedText)) !== null) {
-      const anchor = match[1].trim();
-      const number = parseInt(match[2]);
-      const text = match[3].trim().replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>');
+    // Find all suggestion tags [S#: text]
+    const tagRegex = /\[S(\d+):\s*([^\]]+)\]/g;
+    let tagMatch;
 
-      // Only use inline suggestions (general ones appear after ---)
-      if (!annotatedText.substring(0, match.index).includes('---')) {
+    // Track position after --- separator (general suggestions)
+    const separatorIndex = annotatedText.indexOf('---');
+
+    while ((tagMatch = tagRegex.exec(annotatedText)) !== null) {
+      // Skip suggestions after ---
+      if (separatorIndex !== -1 && tagMatch.index > separatorIndex) {
+        continue;
+      }
+
+      const number = parseInt(tagMatch[1]);
+      const text = tagMatch[2].trim().replace(/\*\*([^*]+)\*\*/g, '<span class="suggestion-keyword">$1</span>');
+
+      // Get the text BEFORE this tag
+      const textBefore = annotatedText.substring(0, tagMatch.index);
+
+      // Find anchor: the last sentence/phrase before the tag
+      // Look for the last sentence-ending punctuation (.!?"') followed by a space
+      // and take that sentence, or take the last 80 chars if no sentence boundary
+      let anchor = '';
+
+      // Try to find the last sentence (ends with . ! ? " ' followed by space or newline or end)
+      const sentenceMatch = textBefore.match(/[^.!?"'\n]*[.!?"']['"']?\s*$/);
+      if (sentenceMatch && sentenceMatch[0].trim().length > 10) {
+        anchor = sentenceMatch[0].trim();
+      } else {
+        // Fallback: use last 80 characters, cleaned up to word boundary
+        const lastChars = textBefore.slice(-100).trim();
+        const wordBoundary = lastChars.indexOf(' ');
+        anchor = wordBoundary > 0 ? lastChars.substring(wordBoundary + 1) : lastChars;
+      }
+
+      if (anchor && anchor.length > 5) {
         placements.push({ anchor, number, text });
       }
     }
@@ -1188,6 +1303,12 @@ class NovelWriterApp {
     if (!this.currentContext) return;
 
     const { type, partId, chapterId, sceneId, noteId } = this.currentContext;
+
+    // In screenplay mode, the editor handles its own saving
+    if (this.isScreenplay() && type === 'scene') {
+      return;
+    }
+
     const editor = document.getElementById('editor-content');
 
     // Clone editor to strip suggestion elements without affecting the displayed DOM

@@ -172,14 +172,41 @@ Respond with ONLY the mood word.`;
     showPopupAtCursor() {
         if (!this.popup) return;
 
+        let top, left;
         const selection = window.getSelection();
-        if (!selection.rangeCount) return;
 
-        const rect = selection.getRangeAt(0).getBoundingClientRect();
-        let top = rect.top - 50;
-        let left = rect.left;
+        // Try to get cursor position from selection
+        if (selection.rangeCount) {
+            const rect = selection.getRangeAt(0).getBoundingClientRect();
+            // Check if we got a valid position (not 0,0 which happens for textarea)
+            if (rect.top !== 0 || rect.left !== 0 || rect.width !== 0) {
+                top = rect.top - 50;
+                left = rect.left;
+            }
+        }
 
-        if (top < 10) top = rect.bottom + 10;
+        // Fallback for textarea (screenplay mode) - position near the active element
+        if (top === undefined) {
+            const textarea = document.getElementById('fountain-input');
+            if (textarea && document.activeElement === textarea) {
+                const textareaRect = textarea.getBoundingClientRect();
+                top = textareaRect.top + 50;
+                left = textareaRect.left + textareaRect.width / 2 - 100;
+            } else {
+                // Final fallback: center top of editor
+                const editor = document.getElementById('editor-content') || document.querySelector('.screenplay-editor-wrapper');
+                if (editor) {
+                    const editorRect = editor.getBoundingClientRect();
+                    top = editorRect.top + 50;
+                    left = editorRect.left + editorRect.width / 2 - 100;
+                } else {
+                    top = 100;
+                    left = window.innerWidth / 2 - 100;
+                }
+            }
+        }
+
+        if (top < 10) top = 60;
         if (left < 10) left = 10;
         if (left > window.innerWidth - 200) left = window.innerWidth - 200;
 
@@ -324,14 +351,41 @@ Respond with ONLY the reaction text, nothing else.`;
     showRemarksPopup(remark, color = '#9B59B6') {
         if (!this.popup) return;
 
+        let top, left;
         const selection = window.getSelection();
-        if (!selection.rangeCount) return;
 
-        const rect = selection.getRangeAt(0).getBoundingClientRect();
-        let top = rect.top - 80; // Higher above cursor than mood
-        let left = rect.left;
+        // Try to get cursor position from selection
+        if (selection.rangeCount) {
+            const rect = selection.getRangeAt(0).getBoundingClientRect();
+            // Check if we got a valid position (not 0,0 which happens for textarea)
+            if (rect.top !== 0 || rect.left !== 0 || rect.width !== 0) {
+                top = rect.top - 80; // Higher above cursor than mood
+                left = rect.left;
+            }
+        }
 
-        if (top < 10) top = rect.bottom + 10;
+        // Fallback for textarea (screenplay mode) - position near the active element
+        if (top === undefined) {
+            const textarea = document.getElementById('fountain-input');
+            if (textarea && document.activeElement === textarea) {
+                const textareaRect = textarea.getBoundingClientRect();
+                top = textareaRect.top + 50;
+                left = textareaRect.left + textareaRect.width / 2 - 100;
+            } else {
+                // Final fallback: center top of editor
+                const editor = document.getElementById('editor-content') || document.querySelector('.screenplay-editor-wrapper');
+                if (editor) {
+                    const editorRect = editor.getBoundingClientRect();
+                    top = editorRect.top + 50;
+                    left = editorRect.left + editorRect.width / 2 - 100;
+                } else {
+                    top = 100;
+                    left = window.innerWidth / 2 - 100;
+                }
+            }
+        }
+
+        if (top < 10) top = 60;
         if (left < 10) left = 10;
         if (left > window.innerWidth - 200) left = window.innerWidth - 200;
 

@@ -629,9 +629,14 @@ export class PlotTracker {
             const prompt = this.buildPrompt(context, isRegenerate, previousAnalysis);
 
             let response = '';
+            const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
             await this.app.aiService.sendMessageStream(
                 [
-                    { role: 'system', content: 'You are a professional story editor performing comprehensive narrative analysis. Be thorough and precise.' },
+                    {
+                        role: 'system', content: isScreenplay
+                            ? 'You are a professional script supervisor performing comprehensive screenplay analysis. Track plot threads, scene continuity, and narrative logic. Be thorough and precise.'
+                            : 'You are a professional story editor performing comprehensive narrative analysis. Be thorough and precise.'
+                    },
                     { role: 'user', content: prompt }
                 ],
                 (chunk, accumulated) => {

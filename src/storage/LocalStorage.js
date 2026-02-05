@@ -79,9 +79,11 @@ export class Storage {
     }
   }
 
-  createNewProject() {
+  createNewProject(projectType = 'novel') {
     const id = crypto.randomUUID();
-    const state = this.getDefaultState();
+    const state = projectType === 'screenplay'
+      ? this.getDefaultScreenplayState()
+      : this.getDefaultState();
     state.id = id;
 
     this.setCurrentProjectId(id);
@@ -186,6 +188,7 @@ export class Storage {
         title: 'Untitled Book',
         subtitle: 'A Novel',
         author: 'Unknown Author',
+        projectType: 'novel',
         created: new Date().toISOString(),
         modified: new Date().toISOString()
       },
@@ -255,6 +258,97 @@ export class Storage {
         parts: {} // { partId: { generatedAt, facts, plotPoints, names, timeline, relationships, locations } }
       },
       // AI Agent Conversations (per-project)
+      conversations: [],
+      activeConversationId: null
+    };
+  }
+
+  /**
+   * Get default state for a screenplay project (Acts → Scenes structure)
+   */
+  getDefaultScreenplayState() {
+    const sceneId = crypto.randomUUID();
+
+    return {
+      id: crypto.randomUUID(),
+      metadata: {
+        title: 'Untitled Screenplay',
+        subtitle: 'An Original Screenplay',
+        author: 'Unknown Author',
+        projectType: 'screenplay',
+        created: new Date().toISOString(),
+        modified: new Date().toISOString()
+      },
+      manuscript: {
+        // Screenplays use Acts directly containing Scenes (no Chapters layer)
+        parts: [
+          {
+            id: crypto.randomUUID(),
+            title: 'ACT ONE',
+            displayTitle: 'ACT ONE',
+            order: 0,
+            // We use 'chapters' array with a single hidden container for scenes
+            chapters: [
+              {
+                id: crypto.randomUUID(),
+                title: '_scenes', // Hidden container
+                displayTitle: '',
+                order: 0,
+                hidden: true,
+                scenes: [
+                  {
+                    id: sceneId,
+                    title: 'FADE IN',
+                    content: `INT. LOCATION - DAY
+
+Action description goes here.
+
+CHARACTER
+Dialogue goes here.`,
+                    order: 0,
+                    wordCount: 0
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      plot: {
+        plotLines: [],
+        gridData: {}
+      },
+      characters: [],
+      notes: {
+        items: []
+      },
+      settings: {
+        theme: 'light',
+        font: 'Courier Prime',
+        fontSize: 12,
+        textColor: '#000000',
+        backgroundColor: null,
+        currentFont: 'Courier Prime',
+        currentFontSize: 12,
+        currentTextColor: '#000000',
+        aiProvider: '',
+        aiApiKey: '',
+        aiModel: '',
+        contextStrategy: 'smart'
+      },
+      currentView: {
+        section: 'manuscript',
+        itemId: null
+      },
+      summaries: {
+        parts: {}
+      },
+      analysis: {
+        parts: {}
+      },
+      worldInfo: {
+        parts: {}
+      },
       conversations: [],
       activeConversationId: null
     };

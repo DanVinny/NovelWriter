@@ -332,7 +332,8 @@ export class AgentPanel {
             // Build system prompt (uses selectedMode - when 'auto', AI decides)
             const systemPrompt = this.app.aiService.buildSystemPrompt(selectedMode, {
                 title: summary.title,
-                author: summary.author
+                author: summary.author,
+                projectType: this.app.state?.metadata?.projectType || 'novel'
             });
 
             // Build messages
@@ -437,12 +438,24 @@ export class AgentPanel {
             : 'Working on manuscript';
 
         // Build action-specific prompts (no code blocks - just natural suggestions)
-        const actionPrompts = {
-            rewrite: `The user has selected the following text and wants you to rewrite it to improve flow, clarity, and prose quality while maintaining the original meaning and fitting the story's tone.`,
-            expand: `The user has selected the following text and wants you to expand it with more sensory details, emotions, and depth while staying true to the story.`,
-            shorten: `The user has selected the following text and wants you to make it more concise while keeping the essential meaning and narrative flow.`,
-            fix: `The user has selected the following text and wants you to fix any grammar, spelling, or punctuation errors. Only fix errors - don't change the style or meaning.`
-        };
+        // Build action-specific prompts
+        let actionPrompts = {};
+
+        if (this.app.state?.metadata?.projectType === 'screenplay') {
+            actionPrompts = {
+                rewrite: `The user has selected the following text and wants you to rewrite it to improve flow, punchiness, and cinematic quality. Ensure strict Fountain formatting and avoid "we see" or passive voice.`,
+                expand: `The user has selected the following text and wants you to expand it with more visual action lines, sensory details, or beat-by-beat breakdown.`,
+                shorten: `The user has selected the following text and wants you to tighten it for better reading speed (vertical writing). Remove excessive description and keep only what's visible on screen.`,
+                fix: `The user has selected the following text and wants you to fix any grammar or Fountain syntax errors (e.g., scene heading format, character names).`
+            };
+        } else {
+            actionPrompts = {
+                rewrite: `The user has selected the following text and wants you to rewrite it to improve flow, clarity, and prose quality while maintaining the original meaning and fitting the story's tone.`,
+                expand: `The user has selected the following text and wants you to expand it with more sensory details, emotions, and depth while staying true to the story.`,
+                shorten: `The user has selected the following text and wants you to make it more concise while keeping the essential meaning and narrative flow.`,
+                fix: `The user has selected the following text and wants you to fix any grammar, spelling, or punctuation errors. Only fix errors - don't change the style or meaning.`
+            };
+        }
 
         const actionInstruction = actionPrompts[action] || instruction;
 
@@ -482,7 +495,8 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
             // Build system prompt with full context
             const systemPrompt = this.app.aiService.buildSystemPrompt('quick', {
                 title: this.app.state.metadata.title,
-                author: this.app.state.metadata.author
+                author: this.app.state.metadata.author,
+                projectType: this.app.state?.metadata?.projectType || 'novel'
             }) + '\n\n--- MANUSCRIPT CONTEXT ---\n\n' + fullContext;
 
             // Prepare messages

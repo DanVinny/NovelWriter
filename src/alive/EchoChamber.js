@@ -665,7 +665,11 @@ export class EchoChamber {
             `${r.emoji} **${r.name}** - ${r.personality}\n   Style: ${r.style}`
         ).join('\n\n');
 
-        return `You are simulating a GROUP CHAT of 5 obsessed readers who have been following a novel-in-progress. They are reuniting in their private chat to read the latest from the author.
+        const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
+        const projectType = isScreenplay ? 'screenplay' : 'novel';
+        const readerType = isScreenplay ? 'script readers' : 'readers';
+
+        return `You are simulating a GROUP CHAT of 5 obsessed ${readerType} who have been following a ${projectType}-in-progress. They are reuniting in their private chat to read the latest from the writer.
 
 ═══════════════════════════════════════════════════════
 THE READERS (embody each one's unique voice):
@@ -731,6 +735,10 @@ MESSAGES:
             `${r.emoji} **${r.name}** - ${r.personality}\n   Style: ${r.style}`
         ).join('\n\n');
 
+        const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
+        const projectType = isScreenplay ? 'screenplay' : 'novel';
+        const readerType = isScreenplay ? 'script readers' : 'readers';
+
         // Format detected changes for the prompt
         let changesDescription = '';
         let noRealChanges = false;
@@ -775,7 +783,7 @@ YOUR REACTION SHOULD ACKNOWLEDGE THIS. Examples:
 `;
         }
 
-        return `You are simulating a GROUP CHAT of 5 passionate readers who are experiencing a novel-in-progress IN REAL-TIME as the author writes it.
+        return `You are simulating a GROUP CHAT of 5 passionate ${readerType} who are experiencing a ${projectType}-in-progress IN REAL-TIME as the writer writes it.
 
 ═══════════════════════════════════════════════════════
 THE READERS (embody each one's unique voice):

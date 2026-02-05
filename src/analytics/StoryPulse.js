@@ -515,10 +515,13 @@ The "scores" array must have exactly ${chapters.length} numbers (one per chapter
 ${manuscriptText.substring(0, 300000)}`;
         }
 
+        const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
         const response = await this.app.aiService.sendMessage(
             [{ role: 'user', content: prompt }],
             {
-                systemPrompt: 'You are a literary analyst. Output valid JSON only. No markdown.',
+                systemPrompt: isScreenplay
+                    ? 'You are a script analyst evaluating screenplay pacing and dramatic impact. Output valid JSON only. No markdown.'
+                    : 'You are a literary analyst. Output valid JSON only. No markdown.',
                 temperature: 0.4
             }
         );

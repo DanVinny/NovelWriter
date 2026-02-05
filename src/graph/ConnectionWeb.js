@@ -786,9 +786,14 @@ export class ConnectionWeb {
             const prompt = this.buildPrompt(context, isRegenerate, previousAnalysis);
 
             let fullResponse = '';
+            const isScreenplay = this.app.state?.metadata?.projectType === 'screenplay';
             await this.app.aiService.sendMessageStream(
                 [
-                    { role: 'system', content: 'You are an expert at analyzing narratives and extracting relationship graphs. Return only valid JSON.' },
+                    {
+                        role: 'system', content: isScreenplay
+                            ? 'You are an expert at analyzing screenplays and building character maps with relationships, locations, and power dynamics. Return only valid JSON.'
+                            : 'You are an expert at analyzing narratives and extracting relationship graphs. Return only valid JSON.'
+                    },
                     { role: 'user', content: prompt }
                 ],
                 (chunk, accumulated) => {

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
@@ -1044,6 +1044,28 @@
           <span class="legend-item"><span class="legend-dot" style="background: #9B4AD9"></span> Item</span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Project Type Selector Modal -->
+  <div class="project-type-modal" id="project-type-modal" style="display: none;">
+    <div class="project-type-modal-overlay"></div>
+    <div class="project-type-modal-content">
+      <h3>Create New Project</h3>
+      <p class="project-type-subtitle">Choose the type of project you want to create</p>
+      <div class="project-type-options">
+        <button class="project-type-btn" data-type="novel">
+          <span class="type-icon">📖</span>
+          <span class="type-name">Novel</span>
+          <span class="type-desc">Chapters, scenes, rich text formatting</span>
+        </button>
+        <button class="project-type-btn" data-type="screenplay">
+          <span class="type-icon">🎬</span>
+          <span class="type-name">Screenplay</span>
+          <span class="type-desc">Fountain format, industry-standard layout</span>
+        </button>
+      </div>
+      <button class="project-type-cancel" id="project-type-cancel">Cancel</button>
     </div>
   </div>
 

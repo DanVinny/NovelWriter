@@ -214,16 +214,27 @@ export class DiffPreview {
 
         try {
             if (this.currentSource === 'replacement') {
-                // Simple overwrite
-                // Preserve basic paragraphs if possible, or just set text
-                // formatting might assume markdown -> HTML conversion needed?
-                // For now, simple text replacement.
-                // We'll split by newline and wrap in <p> if it looks like paragraphs
+                // Simple overwrite - preserve font size from existing content
+                // Capture the current font settings before replacing
+                const existingParagraph = editor.querySelector('p, div, span');
+                let fontSize = '';
+                let fontFamily = '';
+                if (existingParagraph) {
+                    const computedStyle = window.getComputedStyle(existingParagraph);
+                    fontSize = computedStyle.fontSize;
+                    fontFamily = computedStyle.fontFamily;
+                }
+
+                // Build style string for new paragraphs
+                const inlineStyle = (fontSize || fontFamily)
+                    ? ` style="${fontSize ? `font-size: ${fontSize};` : ''}${fontFamily ? `font-family: ${fontFamily};` : ''}"`
+                    : '';
+
                 const paragraphs = this.currentDiff.split(/\n\n+/);
                 const html = paragraphs.map(p => {
                     if (!p.trim()) return '';
-                    // Use markdown parser instead of simple escape
-                    return `<p>${this.parseMarkdown(p).replace(/\n/g, '<br>')}</p>`;
+                    // Use markdown parser and preserve font size
+                    return `<p${inlineStyle}>${this.parseMarkdown(p).replace(/\n/g, '<br>')}</p>`;
                 }).join('');
 
                 editor.innerHTML = html;

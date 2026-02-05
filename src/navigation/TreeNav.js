@@ -5,6 +5,7 @@
  */
 
 import { getContextMenu } from '../components/ContextMenu.js';
+import { FountainParser } from '../editor/FountainParser.js';
 
 export class TreeNav {
     constructor(app) {
@@ -271,38 +272,65 @@ export class TreeNav {
 
         let html = this.renderItem({ section: 'manuscript', id: 'book-title', type: 'book', label: bookTitle, icon: 'book' });
 
+        const isScreenplay = this.app.isScreenplay();
+
         state.manuscript.parts.forEach(part => {
             const partCollapsed = this.isCollapsed(part.id);
-            html += this.renderItem({ section: 'manuscript', id: part.id, type: 'part', label: part.title, icon: 'part', depth: 1, draggable: true, collapsible: true, isCollapsed: partCollapsed });
+            // Screenplay: Use 'clapperboard' icon (we'll add to icons list) or reuse 'part'
+            // We'll reuse 'part' but it will be labeled 'ACT' in UI due to title
+            const icon = isScreenplay ? 'clapperboard' : 'part';
 
-            // Collapsible container for chapters (collapsed if part is collapsed)
+            html += this.renderItem({ section: 'manuscript', id: part.id, type: 'part', label: part.title, icon: icon, depth: 1, draggable: true, collapsible: true, isCollapsed: partCollapsed });
+
+            // Collapsible container
             html += `<div class="tree-children${partCollapsed ? ' collapsed' : ''}" data-parent="${part.id}">`;
 
-            part.chapters.forEach(chapter => {
-                const chapterCollapsed = this.isCollapsed(chapter.id);
-                html += this.renderItem({
-                    section: 'manuscript',
-                    id: chapter.id,
-                    type: 'chapter',
-                    label: chapter.title,
-                    icon: 'file',
-                    depth: 2,
-                    parent: part.id,
-                    draggable: true,
-                    collapsible: true,
-                    isCollapsed: chapterCollapsed,
-                    moodArt: chapter.moodArt?.imageData
+            if (isScreenplay) {
+                // SCREENPLAY MODE: Flatten hierarchy (Act -> Scene)
+                // We iterate through chapters but don't render them
+                part.chapters.forEach(chapter => {
+                    chapter.scenes.forEach(scene => {
+                        html += this.renderItem({
+                            section: 'manuscript',
+                            id: scene.id,
+                            type: 'scene',
+                            label: scene.title,
+                            icon: 'film', // Special icon for screenplay scenes
+                            depth: 2, // Depth 2 instead of 3
+                            parent: chapter.id,
+                            grandparent: part.id,
+                            draggable: true
+                        });
+                    });
                 });
+            } else {
+                // NOVEL MODE: Standard hierarchy (Part -> Chapter -> Scene)
+                part.chapters.forEach(chapter => {
+                    const chapterCollapsed = this.isCollapsed(chapter.id);
+                    html += this.renderItem({
+                        section: 'manuscript',
+                        id: chapter.id,
+                        type: 'chapter',
+                        label: chapter.title,
+                        icon: 'file',
+                        depth: 2,
+                        parent: part.id,
+                        draggable: true,
+                        collapsible: true,
+                        isCollapsed: chapterCollapsed,
+                        moodArt: chapter.moodArt?.imageData
+                    });
 
-                // Collapsible container for scenes (collapsed if chapter is collapsed)
-                html += `<div class="tree-children${chapterCollapsed ? ' collapsed' : ''}" data-parent="${chapter.id}">`;
+                    // Collapsible container for scenes (collapsed if chapter is collapsed)
+                    html += `<div class="tree-children${chapterCollapsed ? ' collapsed' : ''}" data-parent="${chapter.id}">`;
 
-                chapter.scenes.forEach(scene => {
-                    html += this.renderItem({ section: 'manuscript', id: scene.id, type: 'scene', label: scene.title, icon: 'dot', depth: 3, parent: chapter.id, grandparent: part.id, draggable: true });
+                    chapter.scenes.forEach(scene => {
+                        html += this.renderItem({ section: 'manuscript', id: scene.id, type: 'scene', label: scene.title, icon: 'dot', depth: 3, parent: chapter.id, grandparent: part.id, draggable: true });
+                    });
+
+                    html += `</div>`;
                 });
-
-                html += `</div>`;
-            });
+            }
 
             html += `</div>`;
         });
@@ -452,7 +480,11 @@ export class TreeNav {
             users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="currentColor" fill-opacity="0.2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 
             // Simple dot/bullet for minimal items
-            dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>'
+            dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>',
+
+            // Screenplay Icons
+            clapperboard: '<rect x="2" y="6" width="20" height="12" rx="2" stroke-width="2"/><path d="M4 6l2-3h12l2 3"/><path d="M4 15l-1 2"/><path d="M20 15l1 2"/>',
+            film: '<rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" stroke-width="2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/>'
         };
 
         const paddingLeft = 12 + (depth * 16);
@@ -525,23 +557,40 @@ export class TreeNav {
                 items = [
                     { label: 'Edit Title Page', onClick: () => this.app.loadBookTitlePage() },
                     { divider: true },
-                    { label: 'Add Part', onClick: () => this.addPart() }
+                    { label: this.app.isScreenplay() ? 'Add Act' : 'Add Part', onClick: () => this.addPart() }
                 ];
                 break;
             case 'part':
                 const hasSummary = this.app.state.summaries?.parts?.[id];
                 const hasAnalysis = this.app.state.analysis?.parts?.[id];
                 const hasWorldInfo = this.app.state.worldInfo?.parts?.[id];
-                items = [
-                    { label: 'Add Chapter', onClick: () => this.addChapter(id) },
-                    { divider: true },
-                    { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
-                    { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
-                    { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
-                    { divider: true },
-                    { label: 'Rename', onClick: () => this.rename('part', id) },
-                    { label: 'Delete', onClick: () => this.deletePart(id) }
-                ];
+
+                if (this.app.isScreenplay()) {
+                    // SCREENPLAY MODE: Add Scene (to implied chapter)
+                    items = [
+                        { label: 'Add Scene', onClick: () => this.addSceneToAct(id) },
+                        { divider: true },
+                        // Summary/Analysis/WorldInfo still useful for Acts
+                        { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
+                        { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
+                        { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
+                        { divider: true },
+                        { label: 'Rename Act', onClick: () => this.rename('part', id) },
+                        { label: 'Delete Act', onClick: () => this.deletePart(id) }
+                    ];
+                } else {
+                    // NOVEL MODE: Add Chapter
+                    items = [
+                        { label: 'Add Chapter', onClick: () => this.addChapter(id) },
+                        { divider: true },
+                        { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
+                        { label: hasAnalysis ? '🔄 Regenerate Analysis' : '🔍 Agent Analysis', onClick: () => this.generatePartAnalysis(id) },
+                        { label: hasWorldInfo ? '🔄 Update Details' : '📖 Extract Details', onClick: () => this.generateWorldInfo(id, hasWorldInfo) },
+                        { divider: true },
+                        { label: 'Rename', onClick: () => this.rename('part', id) },
+                        { label: 'Delete', onClick: () => this.deletePart(id) }
+                    ];
+                }
                 break;
             case 'analysis':
                 const analysisPartId = id.replace('analysis-', '');
@@ -1067,30 +1116,58 @@ export class TreeNav {
         this.render();
     }
 
-    addChapter(partId) {
+    /**
+     * SCREENPLAY MODE: Add a scene directly to an Act (Part)
+     * This manages the hidden 'chapter' layer automatically
+     */
+    addSceneToAct(partId) {
         const part = this.app.state.manuscript.parts.find(p => p.id === partId);
         if (!part) return;
-        const name = prompt('Enter chapter name:');
-        if (!name) return;
 
-        // Auto-create with scene
-        const sceneId = crypto.randomUUID();
+        // Screenplays have a flat structure of Act -> Scene
+        // But the data model is Act -> Chapter -> Scene
+        // So we need to ensure there is at least one chapter in this Act
 
-        part.chapters.push({
-            id: crypto.randomUUID(),
-            title: name,
-            displayTitle: name,
-            order: part.chapters.length,
-            scenes: [{
-                id: sceneId,
-                title: 'Scene 1',
-                content: '',
+        let chapter = part.chapters[0];
+
+        if (!chapter) {
+            // Create the hidden chapter if it doesn't exist
+            chapter = {
+                id: crypto.randomUUID(),
+                title: 'Scenes', // Hidden container title
+                displayTitle: '',
                 order: 0,
-                wordCount: 0
-            }]
-        });
-        this.app.save();
-        this.render();
+                scenes: []
+            };
+            part.chapters.push(chapter);
+        }
+
+        // Now add the scene to this chapter
+        // We can reuse the existing addScene logic by passing the chapter ID
+        this.addScene(chapter.id, partId);
+    }
+
+    addChapter(partId) {
+        const title = prompt('Enter chapter title:', 'Chapter');
+        if (!title) return;
+
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (part) {
+            part.chapters.push({
+                id: crypto.randomUUID(),
+                title: title,
+                displayTitle: title,
+                order: part.chapters.length,
+                scenes: []
+            });
+            this.app.save();
+            this.render();
+            // Expand the part
+            if (this.isCollapsed(partId)) {
+                this.toggleCollapse(partId);
+                this.render();
+            }
+        }
     }
 
     addScene(chapterId, partId) {
@@ -1417,7 +1494,35 @@ export class TreeNav {
         });
 
         // Build messages for LLM
-        const systemPrompt = `You are a skilled editor creating a narrative summary of ONE SPECIFIC PART of a novel.
+        let systemPrompt, userPrompt;
+
+        if (this.app.isScreenplay()) {
+            systemPrompt = `You are a professional script reader doing coverage on ONE SPECIFIC ACT of a screenplay.
+
+IMPORTANT: You will be given:
+1. Synopses of PREVIOUS Acts (for context only - DO NOT re-summarize these)
+2. The FULL SCRIPT CONTENT of the Act you need to summarize
+
+Your task is to write a synopsis ONLY for the Act labeled "TO BE SUMMARIZED". The previous synopses are just background connection.
+
+Your synopsis should:
+- Cover ONLY the plot beats in the Act being summarized
+- Focus on visual action, key dialogue, and character arcs
+- Be written in present tense
+- Stay within approximately ${targetWordCount} words
+- NOT include meta-commentary, just the synopsis text
+- NOT repeat or summarize the previous Acts again`;
+
+            userPrompt = `Please write a ${targetWordCount}-word synopsis of ONLY "${part.displayTitle || part.title}".
+
+${context}
+
+Remember: Summarize ONLY the content under "TO BE SUMMARIZED". Use standard screenplay synopsis style (present tense, active verbs).
+
+Write a clear, plot-focused synopsis of this specific Act:`;
+
+        } else {
+            systemPrompt = `You are a skilled editor creating a narrative summary of ONE SPECIFIC PART of a novel.
 
 IMPORTANT: You will be given:
 1. Summaries of PREVIOUS parts (for context only - DO NOT re-summarize these)
@@ -1430,16 +1535,17 @@ Your summary should:
 - Capture key plot points, character developments, and important events
 - Be written in present tense, narrative style  
 - Stay within approximately ${targetWordCount} words
-- NOT include meta-commentary or formatting, just the summary text
+- NOT include meta-commentary, just the summary text
 - NOT repeat or summarize the previous parts again`;
 
-        const userPrompt = `Please write a ${targetWordCount}-word summary of ONLY "${part.displayTitle || part.title}".
+            userPrompt = `Please write a ${targetWordCount}-word summary of ONLY "${part.displayTitle || part.title}".
 
 ${context}
 
 Remember: Summarize ONLY the content under "TO BE SUMMARIZED". The previous summaries are just context.
 
 Write a clear, narrative summary of the story events in this specific part:`;
+        }
 
         // Show loading state
         const editor = document.getElementById('editor-content');
@@ -1801,15 +1907,38 @@ Write a clear, narrative summary of the story events in this specific part:`;
         }
 
         // Prompt templates per type
-        const prompts = {
-            expand: 'Look for areas where the scene could be expanded with more description, detail, or depth.',
-            shorten: 'Look for areas that are overly verbose or could be trimmed while keeping the essence.',
-            dialogue: 'Focus on dialogue - suggest improvements for naturalness, subtext, and character voice.',
-            sensory: 'Look for opportunities to add sensory details (sight, sound, smell, touch, taste).',
-            grammar: 'Check for grammar, punctuation, and syntax issues.',
-            prose: 'Suggest improvements to prose style, word choice, and sentence variety.',
-            review: 'Provide a general review covering pacing, clarity, engagement, and any issues.',
-            anchor: `Analyze dialogue for ANCHORING issues. A line is unanchored when:
+        // Prompt templates per type
+        let prompts = {};
+
+        if (this.app.isScreenplay()) {
+            prompts = {
+                expand: 'Look for areas where the scene could be enhanced with better visual descriptions or more meaningful action lines.',
+                shorten: 'Look for verbose descriptions or dialogue that can be trimmed. Focus on "white space" and reading speed.',
+                dialogue: 'Focus on dialogue - suggest improvements for subtext, distinct character voices, and removing "on-the-nose" lines.',
+                sensory: 'Look for opportunities to replace generic descriptions with specific sensory details (visuals, sounds).',
+                grammar: 'Check for grammar and formatting errors. Ensure Fountain syntax (INT/EXT, CAPS) is correct.',
+                prose: 'Suggest improvements to action lines. Remove passive voice (e.g., "is walking" -> "walks") and "we see" references.',
+                review: 'Provide a general review covering pacing, visual storytelling, dialogue beats, and formatting.',
+                anchor: `Analyze dialogue for ANCHORING issues in a screenplay context.
+1. The previous line was spoken by a different character, AND
+2. There is no action line or parenthetical to ground it.
+
+For EACH unanchored line, suggest a contextual anchor using:
+- A brief Action line before the dialogue
+- A Parenthetical (wryly, checks watch, etc.)
+
+IMPORTANT: Number suggestions SEQUENTIALLY (S1, S2...). Keep action lines terse and visual.`
+            };
+        } else {
+            prompts = {
+                expand: 'Look for areas where the scene could be expanded with more description, detail, or depth.',
+                shorten: 'Look for areas that are overly verbose or could be trimmed while keeping the essence.',
+                dialogue: 'Focus on dialogue - suggest improvements for naturalness, subtext, and character voice.',
+                sensory: 'Look for opportunities to add sensory details (sight, sound, smell, touch, taste).',
+                grammar: 'Check for grammar, punctuation, and syntax issues.',
+                prose: 'Suggest improvements to prose style, word choice, and sentence variety.',
+                review: 'Provide a general review covering pacing, clarity, engagement, and any issues.',
+                anchor: `Analyze dialogue for ANCHORING issues. A line is unanchored when:
 1. The previous line was spoken by a different character, AND
 2. There is no action, POV cue, spatial cue, or established alternation, AND
 3. Multiple characters could plausibly speak it
@@ -1826,7 +1955,8 @@ IMPORTANT: Number suggestions SEQUENTIALLY (S1, S2, S3, S4...). Do NOT skip numb
 DO NOT suggest "he said" / "she said". Suggest GRRM-style anchors like:
 "Tyrion swirled his wine. 'That depends.'"
 "From the doorway, Cersei's voice cut through. 'You're too late.'"`
-        };
+            };
+        }
 
         const typeLabels = {
             expand: 'Expand', shorten: 'Shorten', dialogue: 'Improve Dialogue',
@@ -1834,7 +1964,37 @@ DO NOT suggest "he said" / "she said". Suggest GRRM-style anchors like:
             anchor: 'Anchor Dialogue'
         };
 
-        const systemPrompt = `You are an editorial assistant. Analyze a scene and provide suggestions.
+        let systemPrompt, userPrompt;
+
+        if (this.app.isScreenplay()) {
+            // SCREENPLAY MODE: Bottom-only suggestions (no inline to preserve Fountain formatting)
+            systemPrompt = `You are a script consultant analyzing a screenplay scene. Provide editorial feedback.
+
+INSTRUCTIONS:
+1. DO NOT modify or repeat the original script text
+2. Provide suggestions as a numbered list (S1, S2, S3, etc.)
+3. Each suggestion should reference a specific line or element
+4. Focus on: visual storytelling, dialogue subtext, pacing, formatting
+5. Mark key words with **asterisks** for emphasis
+
+OUTPUT FORMAT:
+Just provide a numbered list of suggestions. Example:
+
+[S1: The scene heading should specify time of day - "INT. COFFEE SHOP - DAY"]
+[S2: Character introduction is too "on-the-nose". Consider showing SARAH's nervousness through **action** rather than dialogue.]
+[S3: The dialogue exchange feels rushed. Add a **beat** or action line between their responses.]
+
+Your task: ${prompts[suggestionType]}`;
+
+            userPrompt = `Analyze this screenplay scene for "${typeLabels[suggestionType]}":
+
+${content}
+
+Provide 4-6 suggestions as a numbered list. Focus on professional screenplay standards.`;
+
+        } else {
+            // NOVEL MODE: Inline + bottom suggestions
+            systemPrompt = `You are an editorial assistant. Analyze a scene and provide suggestions.
 
 INSTRUCTIONS:
 1. Return the ORIGINAL text with suggestions inserted
@@ -1854,7 +2014,7 @@ John walked home. [S1: Describe his **emotional state** or **physical weariness*
 
 Your task: ${prompts[suggestionType]}`;
 
-        const userPrompt = `Analyze this scene for "${typeLabels[suggestionType]}":
+            userPrompt = `Analyze this scene for "${typeLabels[suggestionType]}":
 
 ${content}
 
@@ -1863,17 +2023,38 @@ Provide 4-6 suggestions:
 - General suggestions: at the end after "---" for overall feedback
 
 Return the full text with suggestions:`;
+        }
 
-        // Show loading
+        // Show loading - for screenplays, use overlay to avoid destroying ScreenplayEditor
         const editor = document.getElementById('editor-content');
-        const originalEditorContent = editor.innerHTML;
-        editor.innerHTML = `
-            <div class="suggestion-generating">
-                <h2>🤖 Analyzing Scene...</h2>
-                <p>${typeLabels[suggestionType]} suggestions for "${scene.title}"</p>
-                <div class="loading-spinner"></div>
-            </div>
-        `;
+        const isScreenplayMode = this.app.isScreenplay();
+        let originalEditorContent = null;
+        let loadingOverlay = null;
+
+        if (isScreenplayMode) {
+            // Create an overlay instead of replacing content
+            loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'suggestion-overlay';
+            loadingOverlay.innerHTML = `
+                <div class="suggestion-generating">
+                    <h2>🤖 Analyzing Scene...</h2>
+                    <p>${typeLabels[suggestionType]} suggestions for "${scene.title}"</p>
+                    <div class="loading-spinner"></div>
+                </div>
+            `;
+            loadingOverlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100;';
+            editor.style.position = 'relative';
+            editor.appendChild(loadingOverlay);
+        } else {
+            originalEditorContent = editor.innerHTML;
+            editor.innerHTML = `
+                <div class="suggestion-generating">
+                    <h2>🤖 Analyzing Scene...</h2>
+                    <p>${typeLabels[suggestionType]} suggestions for "${scene.title}"</p>
+                    <div class="loading-spinner"></div>
+                </div>
+            `;
+        }
 
         try {
             const messages = [
@@ -1910,12 +2091,23 @@ Return the full text with suggestions:`;
 
             this.app.save();
 
+            // Remove loading overlay for screenplays
+            if (isScreenplayMode && loadingOverlay) {
+                loadingOverlay.remove();
+            }
+
             // Re-load the scene to show suggestions
             this.selectItem(this.container.querySelector(`[data-id="${sceneId}"]`));
 
         } catch (error) {
             console.error('Suggestion generation failed:', error);
-            editor.innerHTML = originalEditorContent;
+
+            if (isScreenplayMode && loadingOverlay) {
+                loadingOverlay.remove();
+            } else if (originalEditorContent !== null) {
+                editor.innerHTML = originalEditorContent;
+            }
+
             alert('Failed to generate suggestions: ' + error.message);
         }
     }
@@ -2024,7 +2216,95 @@ Return the full text with suggestions:`;
         this.loadAnalysis(`analysis-${partId}`);
 
         // Build the comprehensive analysis prompt
-        const systemPrompt = `You are a STRICT, UNCOMPROMISING manuscript editor at a top-tier publishing house. Your job is to provide HONEST, CRITICAL analysis. Writers come to you because they want the HARD TRUTH, not empty praise.
+        // Build the comprehensive analysis prompt
+        let systemPrompt, userPrompt;
+
+        if (this.app.isScreenplay()) {
+            systemPrompt = `You are a PROFESSIONAL SCRIPT READER at a major Hollywood studio. Your job is to provide DETAILED COVERAGE.
+           
+## RATING STANDARDS (PASS / CONSIDER / RECOMMEND)
+- **10/10**: RECOMMEND. A rare masterwork.
+- **8-9/10**: STRONG CONSIDER. Excellent craft, needs minor polish.
+- **6-7/10**: CONSIDER. Good concept, structural issues.
+- **4-5/10**: WEAK CONSIDER. Average execution, familiar tropes.
+- **1-3/10**: PASS. Fundamental flaws in concept or execution.
+
+## CRITICAL GUIDELINES
+1. **FOCUS ON VISUALS** - Is the story shown, not told?
+2. **DIALOGUE** - Is it subtext-rich or "on-the-nose"?
+3. **STRUCTURE** - Does the pacing hold up?
+4. **FORMATTING** - Is it professional Fountain/Hollywood standard?
+5. **ACTIONABLE FEEDBACK** - Every criticism must come with concrete suggestions.
+
+You must return your analysis in the following JSON structure:
+{
+  "characterVoice": {
+    "rating": 5,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "Assess dialogue authenticity and character distinctiveness."
+  },
+  "pacing": {
+    "rating": 4,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "Assess scene length, act breaks, and momentum."
+  },
+  "consistency": {
+    "rating": 6,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "Assess logical consistency and plot holes."
+  },
+  "showVsTell": {
+    "rating": 4,
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "keyFeedback": ["..."],
+    "review": "Assess visual storytelling vs exposition dumps."
+  },
+  "writingStyle": {
+    "passiveVoicePercent": 25,
+    "adverbUsage": "overused",
+    "sentenceVariety": "poor",
+    "readabilityScore": "Grade 8",
+    "strengths": ["..."],
+    "weaknesses": ["..."],
+    "review": "Assess action line clarity, brevity, and 'we see' usage."
+  },
+  "overall": {
+    "rating": 5,
+    "summary": "Blunt, honest overview - PASS, CONSIDER, or RECOMMEND?",
+    "topPriorities": ["The biggest problem to fix first", "Second priority", "Third priority"],
+    "finalNotes": "Honest closing - what does the writer NEED to hear?"
+  }
+}
+
+When referencing scenes, ALWAYS use the format: "In [Scene Heading]..."`;
+
+            userPrompt = `Please analyze this Act of my screenplay: "${partTitle}"
+
+Here is the FULL SCRIPT for context:
+${manuscriptContent}
+
+---
+
+Here is the SPECIFIC ACT to analyze in detail:
+${partContent}
+
+Please provide a comprehensive coverage analysis covering:
+1. Dialogue Analysis - Subtext vs On-the-Nose?
+2. Pacing & Structure - Does it drag? Are beats hitting?
+3. Visual Storytelling - Is it cinematic?
+4. Formatting & Style - Is it professional?
+
+Return your analysis as a JSON object following the exact structure specified.`;
+
+        } else {
+            systemPrompt = `You are a STRICT, UNCOMPROMISING manuscript editor at a top-tier publishing house. Your job is to provide HONEST, CRITICAL analysis. Writers come to you because they want the HARD TRUTH, not empty praise.
 
 ## RATING STANDARDS (BE HARSH)
 - **10/10**: Masterpiece. Publishable as-is. You would rarely give this.
@@ -2095,7 +2375,7 @@ You must return your analysis in the following JSON structure:
 
 When referencing scenes, ALWAYS use the format: "In [Chapter Title] > [Scene Title]..." so the writer can easily navigate there.`;
 
-        let userPrompt = `Please analyze this part of my novel manuscript: "${partTitle}"
+            userPrompt = `Please analyze this part of my novel manuscript: "${partTitle}"
 
 Here is the FULL MANUSCRIPT for context (so you understand the overall story):
 ${manuscriptContent}
@@ -2113,6 +2393,7 @@ Please provide a comprehensive analysis covering:
 5. Writing Style Report - Passive voice, adverbs, sentence variety, readability?
 
 Return your analysis as a JSON object following the exact structure specified.`;
+        }
 
         // ========== PHASE 16: COMPARATIVE PROMPT (REGENERATE ONLY) ==========
         if (isRegenerate && previousAnalysis) {
@@ -2621,7 +2902,45 @@ The writer trusts you to be their honest progress tracker.`
         });
 
         // Build prompt - PLAIN TEXT format (no JSON)
-        const systemPrompt = `You are a literary analyst extracting world information from a novel manuscript.
+        const isScreenplay = this.app.isScreenplay();
+
+        const systemPrompt = isScreenplay
+            ? `You are a script supervisor extracting production information from a screenplay.
+
+STOP. READ THIS FIRST:
+1. Do NOT use markdown headers (like ### Characters).
+2. Do NOT use bolding (**text**) for the section headers.
+3. You MUST use EXACTLY the following section headers with simple bullet points.
+
+TEMPLATE TO FOLLOW:
+
+=== ESTABLISHED FACTS ===
+- Fact 1
+- Fact 2
+
+=== KEY PLOT POINTS ===
+- Plot point 1
+- Plot point 2
+
+=== IMPORTANT NAMES ===
+- Name 1: Context
+- Name 2: Context
+
+=== TIMELINE ===
+- Event 1: Time
+- Event 2: Time
+
+=== CHARACTER RELATIONSHIPS ===
+- A and B: Relationship status
+
+=== LOCATIONS ===
+- Place 1: INT/EXT, Description
+
+=== PROPS & WARDROBE ===
+- Key prop or costume mentioned
+
+Any other format will fail. Return ONLY the text matching this template.`
+            : `You are a literary analyst extracting world information from a novel manuscript.
 
 STOP. READ THIS FIRST:
 1. Do NOT use markdown headers (like ### Characters).
@@ -2903,7 +3222,7 @@ ${manuscriptContent}`;
                         <input type="checkbox" id="export-dark-mode" style="width: 16px; height: 16px; cursor: pointer;">
                         <span>Export in Dark Mode</span>
                     </label>
-                    <button class="btn-large btn-secondary" id="btn-print-book">🖨️ Export / Print Book</button>
+                    <button class="btn-large btn-secondary" id="btn-print-book">🖨️ Export / Print ${this.app.isScreenplay() ? 'Screenplay' : 'Book'}</button>
                 </div>
             </div>
         `;
@@ -2979,6 +3298,11 @@ Return ONLY the synopsis text, no headers or labels.`;
     }
 
     async printBook(darkMode = false) {
+        // Branch for screenplay projects
+        if (this.app.isScreenplay()) {
+            return this.printScreenplay(darkMode);
+        }
+
         const state = this.app.state;
         const parts = state.manuscript.parts || [];
         const synopsis = state.metadata.synopsis || '';
@@ -3192,6 +3516,225 @@ Return ONLY the synopsis text, no headers or labels.`;
         setTimeout(() => {
             printWindow.print();
         }, 500);
+    }
+
+    /**
+     * Print/Export screenplay in industry-standard format
+     * - Courier 12pt
+     * - US Letter (8.5" x 11")
+     * - 1.5" left margin, 1" right/top/bottom
+     */
+    async printScreenplay(darkMode = false) {
+        const state = this.app.state;
+        const parts = state.manuscript.parts || [];
+        const parser = new FountainParser();
+
+        // Color scheme
+        const colors = darkMode ? {
+            bg: '#1a1d23',
+            text: '#e2e8f0',
+            textMuted: '#9ca3af'
+        } : {
+            bg: '#ffffff',
+            text: '#000000',
+            textMuted: '#555'
+        };
+
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${state.metadata.title || 'Screenplay'}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Courier+Prime&display=swap" rel="stylesheet">
+                <style>
+                    @page {
+                        size: letter;
+                        margin: 1in 1in 1in 1.5in;
+                    }
+                    
+                    body {
+                        font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+                        font-size: 12pt;
+                        line-height: 1;
+                        color: ${colors.text};
+                        background: ${colors.bg};
+                        margin: 0;
+                        padding: 0;
+                    }
+
+                    /* Title Page */
+                    .title-page {
+                        height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                        page-break-after: always;
+                    }
+                    .title-page .title {
+                        font-size: 24pt;
+                        text-transform: uppercase;
+                        margin-bottom: 24pt;
+                    }
+                    .title-page .by {
+                        margin-bottom: 12pt;
+                    }
+                    .title-page .author {
+                        margin-bottom: 48pt;
+                    }
+                    .title-page .contact {
+                        position: absolute;
+                        bottom: 1in;
+                        left: 1.5in;
+                        text-align: left;
+                    }
+
+                    /* Scene Content */
+                    .scene-content {
+                        page-break-before: always;
+                    }
+                    .scene-content:first-of-type {
+                        page-break-before: avoid;
+                    }
+
+                    /* Fountain Elements - Industry Standard Margins */
+                    .fountain-scene-heading {
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        margin: 24pt 0 12pt 0;
+                    }
+                    
+                    .fountain-action {
+                        margin: 12pt 0;
+                    }
+                    
+                    .fountain-character {
+                        margin-left: 2.2in;
+                        margin-top: 12pt;
+                        margin-bottom: 0;
+                        text-transform: uppercase;
+                    }
+                    
+                    .fountain-dialogue {
+                        margin-left: 1in;
+                        margin-right: 1.5in;
+                        margin-top: 0;
+                        margin-bottom: 0;
+                    }
+                    
+                    .fountain-parenthetical {
+                        margin-left: 1.6in;
+                        margin-right: 2in;
+                        margin-top: 0;
+                        margin-bottom: 0;
+                    }
+                    
+                    .fountain-transition {
+                        text-align: right;
+                        text-transform: uppercase;
+                        margin: 24pt 0;
+                    }
+                    
+                    .fountain-centered {
+                        text-align: center;
+                        margin: 12pt 0;
+                    }
+                    
+                    .fountain-section {
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        text-align: center;
+                        margin: 36pt 0 24pt 0;
+                    }
+                    
+                    .fountain-page-break {
+                        page-break-after: always;
+                    }
+                    
+                    .fountain-lyrics {
+                        font-style: italic;
+                        margin-left: 1in;
+                    }
+                    
+                    .fountain-synopsis {
+                        color: ${colors.textMuted};
+                        font-style: italic;
+                        display: none; /* Hide in print */
+                    }
+                    
+                    .fountain-note {
+                        display: none; /* Hide notes in print */
+                    }
+                    
+                    .fountain-blank {
+                        height: 12pt;
+                    }
+
+                    .fountain-scene-number {
+                        float: right;
+                    }
+
+                    /* Dual Dialogue */
+                    .fountain-dual-dialogue {
+                        display: flex;
+                        gap: 0.5in;
+                    }
+                    .fountain-dual-left,
+                    .fountain-dual-right {
+                        flex: 1;
+                    }
+                    .fountain-dual-left .fountain-character,
+                    .fountain-dual-right .fountain-character {
+                        margin-left: 0.5in;
+                    }
+                    .fountain-dual-left .fountain-dialogue,
+                    .fountain-dual-right .fountain-dialogue {
+                        margin-left: 0;
+                        margin-right: 0;
+                    }
+
+                    @media print {
+                        body { 
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <!-- Title Page -->
+                <div class="title-page">
+                    <div class="title">${state.metadata.title || 'Untitled Screenplay'}</div>
+                    <div class="by">Written by</div>
+                    <div class="author">${state.metadata.author || 'Unknown'}</div>
+                </div>
+        `;
+
+        // Add each act/scene
+        parts.forEach((part, partIdx) => {
+            part.chapters.forEach((chapter, chapterIdx) => {
+                chapter.scenes?.forEach((scene, sceneIdx) => {
+                    const content = scene.content || '';
+                    const elements = parser.parse(content);
+                    const renderedHtml = parser.toHTML(elements);
+
+                    html += `<div class="scene-content">${renderedHtml}</div>`;
+                });
+            });
+        });
+
+        html += '</body></html>';
+
+        // Open print window
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+
+        // Wait for fonts to load, then print
+        setTimeout(() => {
+            printWindow.print();
+        }, 800);
     }
 
 }
