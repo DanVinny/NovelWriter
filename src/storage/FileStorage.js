@@ -31,20 +31,28 @@ export class FileStorage {
         const savedHandle = await this.restoreHandle();
         if (savedHandle) {
             // Verify we still have permission
-            const permission = await savedHandle.queryPermission({ mode: 'readwrite' });
-            if (permission === 'granted') {
-                this.imagesFolder = savedHandle;
-                return this.imagesFolder;
+            let permission = await savedHandle.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') {
+                permission = await savedHandle.requestPermission({ mode: 'readwrite' });
             }
-            // Request permission again
-            const newPermission = await savedHandle.requestPermission({ mode: 'readwrite' });
-            if (newPermission === 'granted') {
-                this.imagesFolder = savedHandle;
-                return this.imagesFolder;
+
+            if (permission === 'granted') {
+                // Verify the folder is still accessible (not deleted)
+                try {
+                    // Attempt to iterate entries — will throw if folder is gone
+                    const entries = savedHandle.entries();
+                    await entries.next();
+                    this.imagesFolder = savedHandle;
+                    return this.imagesFolder;
+                } catch (e) {
+                    console.warn('[FileStorage] Saved folder no longer accessible, prompting for new one');
+                    // Clear the stale handle
+                    this.imagesFolder = null;
+                }
             }
         }
 
-        // No saved handle or permission denied - ask user to pick folder
+        // No saved handle, permission denied, or folder gone - ask user to pick folder
         return await this.pickFolder();
     }
 
@@ -212,11 +220,22 @@ export class FileStorage {
     }
 
     /**
-     * Check if we have an images folder selected
+     * Check if we have a valid, accessible images folder
      */
     async hasFolder() {
         if (this.imagesFolder) return true;
         const saved = await this.restoreHandle();
-        return saved !== null;
+        if (!saved) return false;
+
+        // Verify the handle is still valid and accessible
+        try {
+            const permission = await saved.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') return false;
+            const entries = saved.entries();
+            await entries.next();
+            return true;
+        } catch (e) {
+            return false;
+        }
     }
 }

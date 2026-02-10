@@ -54,6 +54,9 @@ class NovelWriterApp {
     this.bindSelectionEvents();
     this.render();
 
+    // Check if images folder is configured (async, runs after init)
+    this.checkImagesFolderSetup();
+
     console.log('NovelWriter initialized with AI service!');
   }
 
@@ -1342,6 +1345,80 @@ class NovelWriterApp {
   updateWordCount(text) {
     const words = text.trim().split(/\s+/).filter(w => w).length;
     document.getElementById('word-count').textContent = `${words} words`;
+  }
+
+  /**
+   * Check if images folder is set up on app launch
+   * Shows a banner prompt if no folder is configured
+   */
+  async checkImagesFolderSetup() {
+    if (!this.fileStorage?.isSupported()) return;
+
+    const hasFolder = await this.fileStorage.hasFolder();
+    if (hasFolder) return;
+
+    // Create banner element
+    const banner = document.createElement('div');
+    banner.id = 'images-folder-banner';
+    banner.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10000;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border-bottom: 2px solid #e94560;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-family: var(--font-ui, sans-serif);
+      color: #eee;
+      font-size: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    `;
+
+    banner.innerHTML = `
+      <span style="flex-shrink:0">📁</span>
+      <span><strong>Images folder not linked.</strong> Select the <code style="background:#333;padding:2px 6px;border-radius:3px">Images</code> folder in your NovelWriter project directory to store mood art.</span>
+      <button id="banner-select-folder" style="
+        background: #e94560;
+        color: white;
+        border: none;
+        padding: 6px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+      ">Select Folder</button>
+      <button id="banner-dismiss" style="
+        background: transparent;
+        color: #999;
+        border: 1px solid #444;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        white-space: nowrap;
+      ">Later</button>
+    `;
+
+    document.body.prepend(banner);
+
+    document.getElementById('banner-select-folder').addEventListener('click', async () => {
+      try {
+        await this.fileStorage.pickFolder();
+        banner.remove();
+      } catch (err) {
+        console.error('[Main] Folder selection failed:', err);
+      }
+    });
+
+    document.getElementById('banner-dismiss').addEventListener('click', () => {
+      banner.remove();
+    });
   }
 
   save() {

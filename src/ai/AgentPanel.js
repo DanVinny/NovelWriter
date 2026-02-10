@@ -32,6 +32,14 @@ export class AgentPanel {
         this.conversationSelect = document.getElementById('agent-conversation-select');
         this.deleteConversationBtn = document.getElementById('agent-delete-conversation');
 
+        // Image attachment elements
+        this.attachBtn = document.getElementById('agent-attach-btn');
+        this.imageInput = document.getElementById('agent-image-input');
+        this.imagePreview = document.getElementById('agent-image-preview');
+        this.imageThumb = document.getElementById('agent-image-thumb');
+        this.imageRemoveBtn = document.getElementById('agent-image-remove');
+        this.pendingImage = null; // { base64, mimeType }
+
         this.bindEvents();
         this.bindResizeEvents();
         this.loadActiveConversation();
@@ -82,6 +90,33 @@ export class AgentPanel {
                 const convId = e.target.value;
                 if (convId) {
                     this.loadConversation(convId);
+                }
+            });
+        }
+
+        // Image attachment
+        if (this.attachBtn) {
+            this.attachBtn.addEventListener('click', () => this.imageInput?.click());
+        }
+        if (this.imageInput) {
+            this.imageInput.addEventListener('change', (e) => this.handleImageAttach(e));
+        }
+        if (this.imageRemoveBtn) {
+            this.imageRemoveBtn.addEventListener('click', () => this.removeAttachedImage());
+        }
+
+        // Paste image support
+        if (this.inputField) {
+            this.inputField.addEventListener('paste', (e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of items) {
+                    if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (file) this.processImageFile(file);
+                        break;
+                    }
                 }
             });
         }
@@ -253,7 +288,7 @@ export class AgentPanel {
         if (!this.inputField || this.isProcessing) return;
 
         const userInput = this.inputField.value.trim();
-        if (!userInput) return;
+        if (!userInput && !this.pendingImage) return;
 
         // Check API configuration
         if (!this.app.aiService.isConfigured()) {
@@ -266,6 +301,10 @@ export class AgentPanel {
             this.createNewConversation();
         }
 
+        // Capture and clear pending image
+        const attachedImage = this.pendingImage;
+        this.removeAttachedImage();
+
         // Clear input
         this.inputField.value = '';
 
@@ -277,8 +316,31 @@ export class AgentPanel {
         let cleanInput = userInput
             .replace(/^\[(quick|planning|chat|chatty)\]\s*/i, '');
 
-        // Add user message to history
-        this.addMessage('user', cleanInput);
+        // Add user message to history (with image thumbnail if attached)
+        let savedImageFilename = null;
+        if (attachedImage) {
+            const imgDataUrl = `data:${attachedImage.mimeType};base64,${attachedImage.base64}`;
+            const imageHtml = `<div class="chat-image-attachment"><img src="${imgDataUrl}" alt="Attached image"></div>`;
+            const textContent = cleanInput || 'What do you see in this image?';
+            const msgId = this.addMessage('user', `${imageHtml}${this.formatContent(textContent)}`, false, '', true);
+
+            // Override dataset.content with text-only (image is referenced via dataset.imageFile)
+            const msgEl = document.getElementById(msgId);
+            if (msgEl) msgEl.dataset.content = textContent;
+
+            // Save image to FileStorage for persistence
+            if (this.app.fileStorage) {
+                try {
+                    savedImageFilename = await this.app.fileStorage.saveImage(imgDataUrl, `chat-img-${Date.now()}`);
+                    // Store filename on the DOM element for saveConversation to pick up
+                    if (msgEl) msgEl.dataset.imageFile = savedImageFilename;
+                } catch (e) {
+                    console.warn('Could not save chat image to FileStorage:', e.message);
+                }
+            }
+        } else {
+            this.addMessage('user', cleanInput);
+        }
 
         // Show thinking message (mode will be updated when AI responds)
         if (selectedMode === 'auto') {
@@ -330,22 +392,74 @@ export class AgentPanel {
             const summary = this.contextManager.getManuscriptSummary();
 
             // Build system prompt (uses selectedMode - when 'auto', AI decides)
-            const systemPrompt = this.app.aiService.buildSystemPrompt(selectedMode, {
+            let systemPrompt = this.app.aiService.buildSystemPrompt(selectedMode, {
                 title: summary.title,
                 author: summary.author,
                 projectType: this.app.state?.metadata?.projectType || 'novel'
             });
 
+            // Append vision instructions when image is attached
+            if (attachedImage) {
+                systemPrompt += `\n\n## IMAGE ATTACHED
+The user has attached an image to this message. You CAN see and analyze the image.
+Describe what you observe in the image and relate it to the story/manuscript context.
+If the image appears to be a moodboard, character reference, setting illustration, or any visual reference, incorporate those visual details into your writing advice or creative suggestions.
+Do NOT say you cannot see images — you have full vision capability for this message.`;
+            }
+
             // Build messages
+            const userTextContent = `[MANUSCRIPT CONTEXT]\n${context}\n\n[USER REQUEST]\n${cleanedInput}`;
+
+            // If image is attached, use multipart content format (OpenAI vision API)
+            let userMessage;
+            if (attachedImage) {
+                userMessage = {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image_url',
+                            image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` }
+                        },
+                        {
+                            type: 'text',
+                            text: userTextContent
+                        }
+                    ]
+                };
+            } else {
+                userMessage = { role: 'user', content: userTextContent };
+            }
+
             const messages = [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `[MANUSCRIPT CONTEXT]\n${context}\n\n[USER REQUEST]\n${cleanedInput}` }
+                userMessage
             ];
 
             // Add conversation history (last 40 exchanges = 80 messages)
             const recentHistory = this.history.slice(-80);
             for (const msg of recentHistory) {
                 if (msg.role === 'user' || msg.role === 'assistant') {
+                    // If user message had an image, include it as multi-modal content
+                    if (msg.role === 'user' && msg.imageFile && this.app.fileStorage) {
+                        try {
+                            console.log('[AgentPanel] Loading image from history:', msg.imageFile);
+                            const imageData = await this.app.fileStorage.loadImage(msg.imageFile);
+                            if (imageData) {
+                                console.log('[AgentPanel] Image loaded, including in API messages');
+                                messages.splice(-1, 0, {
+                                    role: 'user',
+                                    content: [
+                                        { type: 'image_url', image_url: { url: imageData } },
+                                        { type: 'text', text: msg.content || 'What do you see in this image?' }
+                                    ]
+                                });
+                                continue;
+                            }
+                        } catch (e) {
+                            console.warn('[AgentPanel] Failed to load history image:', e.message);
+                            // Fall through to text-only
+                        }
+                    }
                     messages.splice(-1, 0, { role: msg.role, content: msg.content });
                 }
             }
@@ -387,9 +501,9 @@ export class AgentPanel {
             );
 
 
-            // Store in history (keep full response including mode prefix for context)
+            // Store in history — only filename reference for images (loaded from FileStorage)
             this.history.push(
-                { role: 'user', content: cleanInput },
+                { role: 'user', content: cleanInput || '[Image sent]', imageFile: savedImageFilename || null },
                 { role: 'assistant', content: fullResponse, thinking: fullThinking }
             );
 
@@ -407,6 +521,54 @@ export class AgentPanel {
         } finally {
             this.isProcessing = false;
         }
+    }
+
+    /**
+     * Handle image file selection from file input
+     */
+    handleImageAttach(e) {
+        const file = e.target.files?.[0];
+        if (file) this.processImageFile(file);
+        // Reset input so same file can be re-selected
+        if (this.imageInput) this.imageInput.value = '';
+    }
+
+    /**
+     * Process an image file into base64 and show preview
+     */
+    processImageFile(file) {
+        if (!file.type.startsWith('image/')) return;
+
+        // Limit to 4MB to avoid API issues
+        if (file.size > 4 * 1024 * 1024) {
+            this.addMessage('system', '⚠️ Image too large (max 4MB). Please use a smaller image.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            // Extract base64 and mime type
+            const [header, base64] = dataUrl.split(',');
+            const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/png';
+
+            this.pendingImage = { base64, mimeType };
+
+            // Show preview
+            if (this.imageThumb) this.imageThumb.src = dataUrl;
+            if (this.imagePreview) this.imagePreview.style.display = 'flex';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /**
+     * Remove the attached image
+     */
+    removeAttachedImage() {
+        this.pendingImage = null;
+        if (this.imagePreview) this.imagePreview.style.display = 'none';
+        if (this.imageThumb) this.imageThumb.src = '';
+        if (this.imageInput) this.imageInput.value = '';
     }
 
     /**
@@ -540,7 +702,7 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
      * Add a message to the history UI
      * @param {string} thinking - Optional thinking/reasoning content for agent messages
      */
-    addMessage(role, content, isTyping = false, thinking = '') {
+    addMessage(role, content, isTyping = false, thinking = '', isRawHtml = false) {
         if (!this.historyContainer) return null;
 
         const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
@@ -575,8 +737,9 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
                 messageEl.innerHTML = `<div class="message-content"><span class="typing-dots">...</span></div>`;
             } else if (role === 'user') {
                 // User messages get an undo/edit button
+                const renderedContent = isRawHtml ? content : this.formatContent(content);
                 messageEl.innerHTML = `
-                    <div class="message-content">${this.formatContent(content)}</div>
+                    <div class="message-content">${renderedContent}</div>
                     <button class="message-undo-btn" title="Edit and regenerate from here">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 10h7V3"/>
@@ -974,7 +1137,7 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
     /**
      * Load a specific conversation by ID
      */
-    loadConversation(conversationId) {
+    async loadConversation(conversationId) {
         const state = this.app.state;
         const conversation = state.conversations?.find(c => c.id === conversationId);
 
@@ -993,7 +1156,32 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
         // Render messages in UI
         this.clearHistoryUI();
         for (const msg of conversation.messages) {
-            this.addMessage(msg.role, msg.content, false, msg.thinking || '');
+            // If message has an attached image, load it from FileStorage
+            if (msg.imageFile && this.app.fileStorage) {
+                try {
+                    const imageData = await this.app.fileStorage.loadImage(msg.imageFile);
+                    if (imageData) {
+                        // Strip any legacy HTML from content (old saves had HTML baked in)
+                        const cleanContent = msg.content.replace(/<div class="chat-image-attachment">.*?<\/div>/g, '').trim();
+                        const imageHtml = `<div class="chat-image-attachment"><img src="${imageData}" alt="Attached image"></div>`;
+                        const msgId = this.addMessage(msg.role, `${imageHtml}${this.formatContent(cleanContent)}`, false, msg.thinking || '', true);
+                        const msgEl = document.getElementById(msgId);
+                        if (msgEl) {
+                            msgEl.dataset.imageFile = msg.imageFile;
+                            msgEl.dataset.content = cleanContent; // Text-only
+                        }
+                        continue;
+                    }
+                } catch (e) {
+                    console.warn('Could not load chat image:', e.message);
+                }
+            }
+            // Strip legacy HTML from content if present (no imageFile but HTML from old saves)
+            let content = msg.content;
+            if (content.includes('<div class="chat-image-attachment">')) {
+                content = content.replace(/<div class="chat-image-attachment">.*?<\/div>/g, '').trim();
+            }
+            this.addMessage(msg.role, content, false, msg.thinking || '');
         }
 
         this.populateConversationSelect();
@@ -1037,8 +1225,11 @@ Please provide your suggestion. Keep it natural and fitting to the story.`;
 
                 const content = el.dataset.content || el.querySelector('.message-content')?.textContent || '';
                 const thinking = el.dataset.thinking || '';
+                const imageFile = el.dataset.imageFile || '';
                 if (content && !el.classList.contains('typing')) {
-                    messages.push({ role, content, thinking, timestamp: new Date().toISOString() });
+                    const msgData = { role, content, thinking, timestamp: new Date().toISOString() };
+                    if (imageFile) msgData.imageFile = imageFile;
+                    messages.push(msgData);
                 }
             }
         }

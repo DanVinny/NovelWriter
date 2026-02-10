@@ -567,8 +567,14 @@ export class TreeNav {
 
                 if (this.app.isScreenplay()) {
                     // SCREENPLAY MODE: Add Scene (to implied chapter)
+                    const actPart = this.app.state.manuscript.parts.find(p => p.id === id);
+                    const hasActMoodArt = !!actPart?.moodArt;
                     items = [
                         { label: 'Add Scene', onClick: () => this.addSceneToAct(id) },
+                        { divider: true },
+                        { label: hasActMoodArt ? '🎨 Regenerate Mood Art' : '🎨 Generate Mood Art', onClick: () => this.generateActMoodArt(id) },
+                        { label: '🖼️ Select from Gallery', onClick: () => this.openActArtGallery(id) },
+                        ...(hasActMoodArt ? [{ label: '❌ Remove Mood Art', onClick: () => this.removeActMoodArt(id) }] : []),
                         { divider: true },
                         // Summary/Analysis/WorldInfo still useful for Acts
                         { label: hasSummary ? '🔄 Regenerate Summary' : '📝 Generate Summary', onClick: () => this.generatePartSummary(id) },
@@ -1646,8 +1652,8 @@ Write a clear, narrative summary of the story events in this specific part:`;
             // Show setup prompt with button (user gesture required)
             editor.innerHTML = `
                 <div class="mood-art-setup">
-                    <h2>📁 Setup Images Folder</h2>
-                    <p>To save mood art images to your computer (instead of bloating storage), please select a folder.</p>
+                    <h2>📁 Link Images Folder</h2>
+                    <p>Select the <strong>Images</strong> folder in your NovelWriter project directory to save mood art.</p>
                     <button id="setup-images-folder-btn" class="btn btn-primary">Select Images Folder</button>
                     <button id="skip-folder-setup-btn" class="btn btn-secondary">Skip (use browser storage)</button>
                 </div>
@@ -1745,6 +1751,138 @@ Write a clear, narrative summary of the story events in this specific part:`;
                 }
             }
         }
+    }
+
+    /**
+     * Generate mood art for a screenplay act (part)
+     */
+    async generateActMoodArt(partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) {
+            alert('Act not found');
+            return;
+        }
+
+        // Gather all scene content from all chapters in this act
+        const actContent = part.chapters
+            .flatMap(ch => ch.scenes || [])
+            .map(s => s.content?.replace(/<[^>]*>/g, '') || '')
+            .join('\n\n');
+
+        if (!actContent.trim()) {
+            alert('Act has no content. Add some scenes first.');
+            return;
+        }
+
+        if (!this.app.imageService.isConfigured()) {
+            alert('Image API not configured. Please add settings in API Configuration.');
+            return;
+        }
+
+        const editor = document.getElementById('editor-content');
+        const originalContent = editor.innerHTML;
+
+        // Check if file storage folder is set up
+        if (this.app.fileStorage?.isSupported() && !(await this.app.fileStorage.hasFolder())) {
+            editor.innerHTML = `
+                <div class="mood-art-setup">
+                    <h2>📁 Link Images Folder</h2>
+                    <p>Select the <strong>Images</strong> folder in your NovelWriter project directory to save mood art.</p>
+                    <button id="setup-images-folder-btn" class="btn btn-primary">Select Images Folder</button>
+                    <button id="skip-folder-setup-btn" class="btn btn-secondary">Skip (use browser storage)</button>
+                </div>
+            `;
+            const result = await new Promise((resolve) => {
+                document.getElementById('setup-images-folder-btn').addEventListener('click', async () => {
+                    try {
+                        await this.app.fileStorage.pickFolder();
+                        resolve('selected');
+                    } catch (err) {
+                        resolve('skipped');
+                    }
+                });
+                document.getElementById('skip-folder-setup-btn').addEventListener('click', () => resolve('skipped'));
+            });
+            if (result === 'skipped') {
+                console.log('[TreeNav] User skipped folder setup, using base64 fallback');
+            }
+        }
+
+        editor.innerHTML = `
+            <div class="mood-art-generating">
+                <h2>🎨 Generating Mood Art...</h2>
+                <p>Analyzing "${part.title || 'Untitled Act'}" and creating visual prompt...</p>
+                <div class="loading-spinner"></div>
+            </div>
+        `;
+
+        try {
+            const result = await this.app.imageService.generateChapterArt(actContent, part.title || 'Untitled Act');
+
+            const galleryItem = await this.app.imageService.addToGallery(result.imageData, result.styledPrompt, {
+                partId,
+                actTitle: part.title,
+                originalPrompt: result.prompt
+            });
+
+            part.moodArt = {
+                filename: galleryItem.filename || null,
+                imageData: galleryItem.filename ? null : result.imageData,
+                prompt: result.prompt,
+                styledPrompt: result.styledPrompt,
+                generatedAt: result.generatedAt
+            };
+
+            this.app.save();
+            this.render();
+
+            editor.innerHTML = `
+                <div class="mood-art-result">
+                    <h2>🎨 Mood Art Generated!</h2>
+                    <div class="mood-art-preview">
+                        <img src="${result.imageData}" alt="Act Mood Art" />
+                    </div>
+                    <div class="mood-art-prompt">
+                        <strong>Generated Prompt:</strong>
+                        <p>${result.styledPrompt}</p>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Act mood art generation failed:', error);
+            editor.innerHTML = originalContent;
+            alert('Failed to generate mood art: ' + error.message);
+        }
+    }
+
+    removeActMoodArt(partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (part && part.moodArt) {
+            if (confirm('Remove mood art from this act?')) {
+                if (part.moodArt.filename && this.app.fileStorage) {
+                    this.app.fileStorage.deleteImage(part.moodArt.filename).catch(() => { });
+                }
+                delete part.moodArt;
+                this.app.save();
+                this.render();
+            }
+        }
+    }
+
+    openActArtGallery(partId) {
+        const part = this.app.state.manuscript.parts.find(p => p.id === partId);
+        if (!part) return;
+        this.app.imageService.openGalleryModal((selectedImage) => {
+            part.moodArt = {
+                filename: selectedImage.filename || null,
+                imageData: selectedImage.filename ? null : selectedImage.imageData,
+                prompt: selectedImage.prompt || '',
+                styledPrompt: selectedImage.styledPrompt || '',
+                generatedAt: selectedImage.generatedAt || new Date().toISOString()
+            };
+            this.app.save();
+            this.render();
+        });
     }
 
     openArtGallery(chapterId, partId) {

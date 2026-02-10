@@ -12,25 +12,29 @@ export class ImageService {
      * Check if image service is configured
      */
     isConfigured() {
-        const settings = this.app.state.settings;
-        // Use main API settings if image-specific ones aren't set
-        const provider = settings.imageProvider || settings.aiProvider;
-        const apiKey = settings.imageApiKey || settings.aiApiKey;
-        const model = settings.imageModel;
-
-        return provider && apiKey && model;
+        const { provider, apiKey, model } = this.getSettings();
+        return !!(provider && apiKey && model);
     }
 
     /**
-     * Get effective settings (falls back to main API if not set)
+     * Get effective settings (reads from localStorage, falls back to main API if not set)
      */
     getSettings() {
-        const settings = this.app.state.settings;
+        // Image-specific settings from localStorage
+        const imageProvider = localStorage.getItem('novelwriter-image-provider') || '';
+        const imageApiKey = localStorage.getItem('novelwriter-image-apikey') || '';
+        const imageModel = localStorage.getItem('novelwriter-image-model') || '';
+        const imageStyle = localStorage.getItem('novelwriter-image-style') || '';
+
+        // Fall back to main API settings if image-specific ones aren't set
+        const mainProvider = localStorage.getItem('novelwriter-ai-provider') || '';
+        const mainApiKey = localStorage.getItem('novelwriter-ai-apikey') || '';
+
         return {
-            provider: settings.imageProvider || settings.aiProvider,
-            apiKey: settings.imageApiKey || settings.aiApiKey,
-            model: settings.imageModel || 'z-image-turbo',
-            stylePrefix: settings.imageStylePrefix || ''
+            provider: imageProvider || mainProvider,
+            apiKey: imageApiKey || mainApiKey,
+            model: imageModel,
+            stylePrefix: imageStyle
         };
     }
 
@@ -41,11 +45,21 @@ export class ImageService {
      */
     async generateChapterArt(chapterContent, chapterTitle) {
         if (!this.isConfigured()) {
-            throw new Error('Image API not configured. Please add settings in API Configuration.');
+            const settings = this.getSettings();
+            const missing = [];
+            if (!settings.provider) missing.push('Image Provider URL');
+            if (!settings.apiKey) missing.push('Image API Key');
+            if (!settings.model) missing.push('Image Model');
+            throw new Error(`Image API not configured. Missing: ${missing.join(', ')}. Check API Configuration.`);
         }
 
-        // Step 1: Generate image prompt using LLM
-        const imagePrompt = await this.generateImagePrompt(chapterContent, chapterTitle);
+        // Step 1: Generate image prompt using main LLM
+        let imagePrompt;
+        try {
+            imagePrompt = await this.generateImagePrompt(chapterContent, chapterTitle);
+        } catch (err) {
+            throw new Error(`Step 1 (LLM prompt generation) failed: ${err.message}`);
+        }
 
         // Step 2: Apply style prefix and generate image
         const settings = this.getSettings();
@@ -54,7 +68,12 @@ export class ImageService {
             : imagePrompt;
 
         // Step 3: Call image API
-        const imageData = await this.generateImage(styledPrompt);
+        let imageData;
+        try {
+            imageData = await this.generateImage(styledPrompt);
+        } catch (err) {
+            throw new Error(`Step 2 (image generation) failed: ${err.message}`);
+        }
 
         return {
             imageData,
@@ -66,27 +85,26 @@ export class ImageService {
 
     /**
      * Add generated image to global gallery
-     * Now saves to filesystem and stores only filename
+     * Always saves to filesystem — no base64 fallback to prevent localStorage bloat
      */
     async addToGallery(imageData, prompt, meta = {}) {
         const gallery = this.getGallery();
         const id = Date.now().toString();
 
-        // Try to save to filesystem
+        // Save to filesystem (required — no silent fallback)
         let filename = null;
-        try {
-            if (this.app.fileStorage?.isSupported()) {
-                filename = await this.app.fileStorage.saveImage(imageData, `gallery-${id}`);
-            }
-        } catch (err) {
-            console.error('[ImageService] Failed to save to filesystem:', err);
+        if (this.app.fileStorage?.isSupported()) {
+            filename = await this.app.fileStorage.saveImage(imageData, `gallery-${id}`);
+        }
+
+        if (!filename) {
+            throw new Error('Could not save image. Please select an images folder in the setup prompt.');
         }
 
         const newItem = {
             id,
-            // Store filename if saved to file, otherwise fall back to base64 (legacy)
-            filename: filename || null,
-            imageData: filename ? null : imageData, // Only store base64 if no file
+            filename,
+            imageData: null, // Never store base64 in state
             prompt,
             meta,
             timestamp: new Date().toISOString()
@@ -97,7 +115,6 @@ export class ImageService {
         // Limit history to 50 images
         if (gallery.length > 50) {
             const removed = gallery.pop();
-            // Delete old file if it exists
             if (removed?.filename && this.app.fileStorage) {
                 this.app.fileStorage.deleteImage(removed.filename).catch(() => { });
             }
@@ -208,9 +225,10 @@ Image prompt keywords:`;
         // Build endpoint URL for NanoGPT
         let baseUrl = settings.provider;
         if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-        // Remove /v1 suffix if present (NanoGPT uses different path)
-        baseUrl = baseUrl.replace(/\/v1$/, '');
+        // Strip /api/v1, /v1, or /api suffixes to get the base domain
+        baseUrl = baseUrl.replace(/\/(api\/)?v1$/, '').replace(/\/api$/, '');
         const endpoint = `${baseUrl}/api/generate-image`;
+        console.log('[ImageService] Calling image API:', endpoint, 'model:', settings.model);
 
         const requestBody = {
             model: settings.model,

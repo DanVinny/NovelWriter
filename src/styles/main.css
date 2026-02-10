@@ -1174,10 +1174,17 @@ body.resizing-active .agent-drawer-tab {
 
 .agent-input-area {
   display: flex;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
   padding: var(--space-md);
   border-top: 1px solid var(--border-light);
   background: var(--bg-secondary);
+}
+
+.agent-input-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
 }
 
 .agent-input-area textarea {
@@ -1202,6 +1209,71 @@ body.resizing-active .agent-drawer-tab {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.agent-attach-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.agent-attach-btn:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.agent-image-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.agent-image-preview img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+
+.agent-image-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+}
+
+.agent-image-remove:hover {
+  color: var(--danger);
+  background: var(--bg-hover);
+}
+
+.chat-image-attachment {
+  margin-bottom: 8px;
+}
+
+.chat-image-attachment img {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  object-fit: cover;
 }
 
 #btn-toggle-agent.active {
